@@ -5,6 +5,8 @@
 #include "Network/Auth/AuthenticationUtils.h"
 #include "Network/Client/ClientConnectionRequest.h"
 #include "Network/Crypto/Base64.h"
+#include "Network/ConnectionRequest.h"
+#include "Network/NetherNet/NetherNetIdentity.h"
 
 #include <emscripten/emscripten.h>
 #include <ctime>
@@ -57,6 +59,45 @@ std::string Base64::encode(const std::string& bytes) {
         result += alphabet[((first & 3) << 4) | (second >> 4)];
         result += offset + 1 < bytes.size() ? alphabet[((second & 15) << 2) | (third >> 6)] : '=';
         result += offset + 2 < bytes.size() ? alphabet[third & 63] : '=';
+    }
+
+    return result;
+}
+
+std::string nethernet::Identity::encodeBase64(const std::string& bytes) {
+    return Base64::encode(bytes);
+}
+
+std::string ConnectionRequest::decodeBase64Url(const std::string& value) {
+    const std::string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string result;
+    unsigned int accumulator = 0;
+    unsigned int bits = 0;
+
+    for (auto character : value) {
+        if (character == '=') {
+            break;
+        }
+
+        if (character == '-') {
+            character = '+';
+        } else if (character == '_') {
+            character = '/';
+        }
+
+        const auto index = alphabet.find(character);
+
+        if (index == std::string::npos) {
+            return {};
+        }
+
+        accumulator = (accumulator << 6) | static_cast<unsigned int>(index);
+        bits += 6;
+
+        if (bits >= 8) {
+            bits -= 8;
+            result += static_cast<char>((accumulator >> bits) & 255);
+        }
     }
 
     return result;

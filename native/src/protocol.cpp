@@ -2,6 +2,7 @@
 #include "bedrock_packs/query.h"
 
 #include "Protocol/PacketCodecContext.h"
+#include "Protocol/Codec/ProtocolCodecRegistry.h"
 #include "Protocol/Packets/RequestNetworkSettingsPacket.h"
 #include "Protocol/Packets/LoginPacket.h"
 #include "Protocol/Packets/NetworkSettingsPacket.h"
@@ -18,20 +19,32 @@
 #include <emscripten/emscripten.h>
 #include <cstring>
 #include <exception>
+#include <optional>
 
 namespace {
     const BlockDefinitionRegistry blocks;
     const ItemDefinitionRegistry items;
-    const PacketCodecContext codec(blocks, items);
+    std::optional<PacketCodecContext> codec(std::in_place, blocks, items);
 
     const char* encode(const Packet& packet) {
         BinaryStream stream;
-        packet.writeWithHeader(stream, codec);
+        packet.writeWithHeader(stream, *codec);
         return bedrock_packs::set_output(stream.getBuffer());
     }
 }
 
 extern "C" {
+    EMSCRIPTEN_KEEPALIVE int bp_protocol_select(int protocol) {
+        const auto selected = ProtocolCodecRegistry::instance().find(protocol);
+
+        if (!selected) {
+            return 0;
+        }
+
+        codec.emplace(blocks, items, selected);
+        return 1;
+    }
+
     EMSCRIPTEN_KEEPALIVE const char* bp_login(unsigned int length, int protocol) {
         if (length > bp_capacity()) {
             return bedrock_packs::set_output({});
@@ -77,7 +90,7 @@ extern "C" {
             if (id == NetworkSettingsPacket::ID) {
                 NetworkSettingsPacket packet;
                 packet.readHeader(stream);
-                packet.read(stream, codec);
+                codec->getCodec().read(packet, stream, *codec);
                 const auto algorithm = static_cast<int>(packet.mCompressionAlgorithm);
                 return bedrock_packs::set_output(
                     "{\"type\":\"settings\",\"algorithm\":" + std::to_string(algorithm == 2 ? 255 : algorithm) +
@@ -88,21 +101,21 @@ extern "C" {
             if (id == ServerToClientHandshakePacket::ID) {
                 ServerToClientHandshakePacket packet;
                 packet.readHeader(stream);
-                packet.read(stream, codec);
+                codec->getCodec().read(packet, stream, *codec);
                 return bedrock_packs::set_output("{\"type\":\"handshake\",\"token\":" + JsonText::quote(packet.mJwt) + "}");
             }
 
             if (id == PlayStatusPacket::ID) {
                 PlayStatusPacket packet;
                 packet.readHeader(stream);
-                packet.read(stream, codec);
+                codec->getCodec().read(packet, stream, *codec);
                 return bedrock_packs::set_output("{\"type\":\"status\",\"status\":" + std::to_string(static_cast<int>(packet.mStatus)) + "}");
             }
 
             if (id == DisconnectPacket::ID) {
                 DisconnectPacket packet;
                 packet.readHeader(stream);
-                packet.read(stream, codec);
+                codec->getCodec().read(packet, stream, *codec);
                 return bedrock_packs::set_output("{\"type\":\"disconnect\",\"message\":" + JsonText::quote(packet.mKickMessage) + "}");
             }
 

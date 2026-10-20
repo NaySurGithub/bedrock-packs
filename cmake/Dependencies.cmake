@@ -33,6 +33,9 @@ add_library(FalconNetworkBrowser STATIC
     ${falcon_network_SOURCE_DIR}/src/Network/JsonText.cpp
     ${falcon_network_SOURCE_DIR}/src/Network/NetherNet/NetherNetSignal.cpp
     ${falcon_network_SOURCE_DIR}/src/Network/NetherNet/NetherNetCredentials.cpp
+    ${falcon_network_SOURCE_DIR}/src/Network/NetherNet/NetherNetDescription.cpp
+    ${falcon_network_SOURCE_DIR}/src/Network/NetherNet/NetherNetConnection.cpp
+    ${falcon_network_SOURCE_DIR}/src/Network/NetworkIdentifier.cpp
 )
 
 target_include_directories(FalconNetworkBrowser PUBLIC

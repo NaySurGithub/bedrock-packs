@@ -4,6 +4,7 @@
 #include "Core/Json/Json.h"
 #include "Network/JsonText.h"
 #include "Network/NetherNet/NetherNetSignal.h"
+#include "Network/NetherNet/NetherNetDescription.h"
 
 #include <emscripten/emscripten.h>
 #include <limits>
@@ -41,6 +42,52 @@ namespace {
         }
 
         return true;
+    }
+}
+
+extern "C" {
+    EMSCRIPTEN_KEEPALIVE const char* bp_sdp_read(unsigned int length) {
+        if (length == 0 || length > bp_capacity()) {
+            return bedrock_packs::set_output({});
+        }
+
+        const std::string sdp(reinterpret_cast<char*>(bp_buffer()), length);
+        const auto fingerprints = nethernet::Description::parseFingerprints(sdp);
+        nethernet::IdentityData identity;
+        std::string error;
+        const auto present = nethernet::Description::parseIdentity(sdp, identity, error);
+
+        return bedrock_packs::set_output(
+            "{\"fingerprints\":" + JsonText::quote(nethernet::Description::generateFingerprintsPayload(fingerprints)) +
+            ",\"hasFingerprints\":" + (fingerprints.empty() ? "false" : "true") +
+            ",\"identity\":" + (present && identity.isValid() ? "true" : "false") +
+            ",\"error\":" + JsonText::quote(error) +
+            ",\"token\":" + JsonText::quote(identity.mAssertionToken) +
+            ",\"signature\":" + JsonText::quote(identity.mAssertionFingerprints) + "}"
+        );
+    }
+
+    EMSCRIPTEN_KEEPALIVE const char* bp_sdp_identity(unsigned int length) {
+        if (length > bp_capacity()) {
+            return bedrock_packs::set_output({});
+        }
+
+        const auto input = json::parse(std::string(reinterpret_cast<char*>(bp_buffer()), length));
+        const auto* token = input ? input->get("token") : nullptr;
+        const auto* signature = input ? input->get("signature") : nullptr;
+        const auto* domain = input ? input->get("domain") : nullptr;
+
+        if (!token || !token->isString() || !signature || !signature->isString() ||
+            !domain || !domain->isString()) {
+            return bedrock_packs::set_output({});
+        }
+
+        nethernet::IdentityData identity;
+        identity.mAssertionToken = token->string();
+        identity.mAssertionFingerprints = signature->string();
+        identity.mIdpDomain = domain->string();
+        identity.mIdpProtocol = "default";
+        return bedrock_packs::set_output(nethernet::Description::encodeIdentity(identity));
     }
 }
 

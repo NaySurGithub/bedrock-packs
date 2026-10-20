@@ -7,6 +7,7 @@ import type { DestinationPolicy } from './policy.js';
 import { probeEndpoint } from './probe.js';
 import { createAuthHandler } from './auth.js';
 import type { AuthForwarder } from './auth.js';
+import { createSignalingHandler } from './signaling.js';
 
 export interface RelayOptions {
     origins: ReadonlySet<string>;
@@ -26,12 +27,15 @@ const MAX_PACKETS_PER_SECOND = 1000;
 
 export function createRelay(options: RelayOptions) {
     const authenticate = createAuthHandler(options.origins, options.authForwarder);
+    const signal = createSignalingHandler(options);
 
     const server = createServer((request, response) => {
         response.setHeader('Cache-Control', 'no-store');
         response.setHeader('X-Content-Type-Options', 'nosniff');
         if (request.url === '/auth') {
             void authenticate(request, response);
+        } else if (request.url?.split('?')[0] === '/signal') {
+            void signal(request, response);
         } else if (request.method === 'GET' && request.url === '/healthz') {
             response.writeHead(200, {
                 'Content-Type': 'application/json',

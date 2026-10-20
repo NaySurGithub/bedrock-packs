@@ -1,6 +1,8 @@
 import type { AuthConfig } from './auth/types.js';
+import type { NativeConnection } from './connection/codec.js';
 
 export interface QueryModule {
+    connection: NativeConnection;
     HEAPU8: Uint8Array;
     bp_buffer(): number;
     bp_capacity(): number;
@@ -26,6 +28,7 @@ export async function loadQueryModule(): Promise<QueryModule> {
     const native = await generatedModule.default();
 
     return {
+        connection: native as NativeConnection,
         get HEAPU8() {
             return native.HEAPU8;
         },

@@ -6,6 +6,7 @@ add_executable(bedrock-packs
     src/connection.cpp
     src/framing.cpp
     src/client-data.cpp
+    src/rtc.cpp
 )
 
 target_include_directories(bedrock-packs PRIVATE include)

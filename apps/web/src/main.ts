@@ -1,6 +1,8 @@
 import './style.css';
-import { loadQueryModule, queryServer } from './query.js';
+import { loadQueryModule } from './query.js';
 import { mountAccount } from './auth/ui.js';
+import type { AccountClient } from './auth/client.js';
+import { connectBedrock } from './connection/session.js';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
@@ -52,7 +54,7 @@ app.innerHTML = `
                 />
 
                 <button id="connect" class="primary-button" type="submit" disabled>
-                    Check server
+                    Join server
                 </button>
             </form>
 
@@ -114,6 +116,7 @@ const runtime = document.querySelector<HTMLSpanElement>('#runtime')!;
 const result = document.querySelector<HTMLDListElement>('#result')!;
 const modulePromise = loadQueryModule();
 let unmountAccount: (() => void) | undefined;
+let account: AccountClient | undefined;
 
 let active: AbortController | undefined;
 
@@ -124,7 +127,9 @@ void modulePromise
         const accountButton = document.querySelector<HTMLButtonElement>('#account')!;
 
         try {
-            unmountAccount = mountAccount(accountButton, module.authConfig());
+            unmountAccount = mountAccount(accountButton, module.authConfig(), (client) => {
+                account = client;
+            });
         } catch (error: unknown) {
             accountButton.title =
                 error instanceof Error ? error.message : 'Account services are unavailable.';
@@ -137,22 +142,51 @@ void modulePromise
 
 form.addEventListener('submit', (event) => {
     event.preventDefault();
-    active?.abort();
+
+    if (active) {
+        active.abort();
+        active = undefined;
+        button.textContent = 'Join server';
+        return;
+    }
+
     active = new AbortController();
+    const attempt = active;
 
     const host = document.querySelector<HTMLInputElement>('#host')!.value.trim();
     const port = Number(document.querySelector<HTMLInputElement>('#port')!.value);
     const signal = active.signal;
 
-    button.disabled = true;
-    button.textContent = 'Connecting…';
+    button.textContent = 'Cancel';
     result.hidden = true;
     status.textContent = 'Detecting server transport…';
 
     void modulePromise
-        .then((module) => queryServer(module, host, port, signal))
-        .then((server) => {
-            status.textContent = 'Server reachable.';
+        .then((module) => {
+            if (!account) {
+                throw new Error('Microsoft sign-in is unavailable.');
+            }
+
+            return connectBedrock(module, account, host, port, signal, (state) => {
+                if (active !== attempt) {
+                    return;
+                }
+
+                status.textContent = state.message;
+
+                if (state.phase === 'connected') {
+                    button.textContent = 'Disconnect';
+                } else if (state.phase === 'disconnected') {
+                    active = undefined;
+                    button.textContent = 'Join server';
+                }
+            });
+        })
+        .then(({ server }) => {
+            if (active !== attempt) {
+                return;
+            }
+
             result.replaceChildren();
 
             for (const [label, value] of [
@@ -174,11 +208,13 @@ form.addEventListener('submit', (event) => {
             result.hidden = false;
         })
         .catch((error: unknown) => {
+            if (active !== attempt) {
+                return;
+            }
+
+            active = undefined;
+            button.textContent = 'Join server';
             status.textContent = error instanceof Error ? error.message : 'Connection failed.';
-        })
-        .finally(() => {
-            button.disabled = false;
-            button.textContent = 'Check server';
         });
 });
 
@@ -186,6 +222,7 @@ window.addEventListener('pagehide', () => active?.abort());
 
 if (import.meta.hot) {
     import.meta.hot.dispose(() => {
+        active?.abort();
         unmountAccount?.();
     });
 }

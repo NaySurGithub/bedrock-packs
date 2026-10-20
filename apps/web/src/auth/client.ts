@@ -582,14 +582,17 @@ export class AccountClient {
     async #minecraft(session: AccountSession, signal: AbortSignal): Promise<MinecraftIdentity> {
         await this.#service(session, signal);
 
-        if (session.minecraft && this.#valid(session.minecraft.expiresAt)) {
-            return session.minecraft;
-        }
-
-        const pair = await this.#store.keyPair('minecraft-identity', 'P-384');
+        const pair = await this.#store.keyPair('minecraft-connection', 'P-384');
         const publicKey = base64(
             new Uint8Array(await crypto.subtle.exportKey('spki', pair.publicKey)),
         );
+
+        if (
+            session.minecraft?.publicKey === publicKey &&
+            this.#valid(session.minecraft.expiresAt)
+        ) {
+            return session.minecraft;
+        }
         const multiplayer = object(
             this.#requireSuccess(
                 await this.#request(
@@ -854,6 +857,60 @@ export class AccountClient {
         }
 
         return structuredClone(this.#session.minecraft);
+    }
+
+    async connectionIdentity(): Promise<{
+        identity: MinecraftIdentity;
+        gamertag: string;
+        sign(data: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>>;
+        agree(publicKey: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>>;
+    }> {
+        const identity = await this.minecraftIdentity();
+        const epoch = this.#generation;
+        const pair = await this.#store.keyPair('minecraft-connection', 'P-384');
+        const agreement = await this.#store.agreementKey?.('minecraft-connection');
+
+        if (!agreement || !this.#session?.profile) {
+            throw new Error('The Minecraft connection key is unavailable. Sign in again.');
+        }
+
+        const assertActive = () => {
+            if (epoch !== this.#generation || this.#state.status !== 'signed-in') {
+                throw new Error('The Microsoft session changed. Reconnect to the server.');
+            }
+        };
+
+        return {
+            identity,
+            gamertag: this.#session.profile.gamertag,
+            async sign(data) {
+                assertActive();
+                const signature = await crypto.subtle.sign(
+                    { name: 'ECDSA', hash: 'SHA-384' },
+                    pair.privateKey,
+                    data,
+                );
+                assertActive();
+                return new Uint8Array(signature);
+            },
+            async agree(publicKey) {
+                assertActive();
+                const remote = await crypto.subtle.importKey(
+                    'spki',
+                    publicKey,
+                    { name: 'ECDH', namedCurve: 'P-384' },
+                    false,
+                    [],
+                );
+                const secret = await crypto.subtle.deriveBits(
+                    { name: 'ECDH', public: remote },
+                    agreement,
+                    384,
+                );
+                assertActive();
+                return new Uint8Array(secret);
+            },
+        };
     }
 
     cancel(): void {

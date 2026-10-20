@@ -21,7 +21,11 @@ function authUrl(): URL {
     return new URL('/auth', location.href);
 }
 
-export function mountAccount(button: HTMLButtonElement, config: AuthConfig): () => void {
+export function mountAccount(
+    button: HTMLButtonElement,
+    config: AuthConfig,
+    onClient?: (client: AccountClient) => void,
+): () => void {
     const dialog = document.createElement('dialog');
     dialog.className = 'account-dialog';
     dialog.setAttribute('aria-labelledby', 'account-title');
@@ -72,6 +76,7 @@ export function mountAccount(button: HTMLButtonElement, config: AuthConfig): () 
         store: new AccountVault(),
         transport: new BrowserAuthTransport(authUrl()),
     });
+    onClient?.(client);
 
     let current: AccountState = { status: 'restoring' };
     let countdown: ReturnType<typeof setInterval> | undefined;
