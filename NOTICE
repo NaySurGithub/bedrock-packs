@@ -10,5 +10,8 @@ accompanying GPL-3.0 terms. Dependency revisions are pinned in
 cmake/Dependencies.cmake. Their license texts and source/relinking instructions
 are distributed with the web build under third-party/.
 
+HTTP endpoint transport detection follows the behavior inspected in SolarProxy:
+probe GET /v1/join before falling back to RakNet. No SolarProxy source is copied.
+
 Kestrel was inspected as an architectural reference; its sources are not
 included in this implementation.

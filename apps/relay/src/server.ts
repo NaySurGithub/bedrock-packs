@@ -4,6 +4,7 @@ import type { Socket } from 'node:net';
 import { WebSocket, WebSocketServer } from 'ws';
 import { resolveTarget } from './policy.js';
 import type { DestinationPolicy } from './policy.js';
+import { probeEndpoint } from './probe.js';
 
 export interface RelayOptions {
     origins: ReadonlySet<string>;
@@ -99,14 +100,38 @@ export function createRelay(options: RelayOptions) {
             release();
         }, 5000);
         void (options.resolve ?? resolveTarget)(host, Number(rawPort), options.policy)
-            .then((target) => {
+            .then(async (target) => {
                 clearTimeout(timeout);
+
+                const endpoint = await probeEndpoint(
+                    target.address,
+                    target.family,
+                    host,
+                    Number(rawPort),
+                );
+
                 if (socket.destroyed) {
                     return;
                 }
 
                 webSockets.handleUpgrade(request, socket as Socket, head, (ws) => {
                     socket.off('close', release);
+
+                    if (endpoint) {
+                        ws.on('error', () => ws.terminate());
+                        ws.once('close', release);
+                        ws.send(
+                            JSON.stringify({
+                                type: 'ready',
+                                version: 1,
+                                transport: 'nethernet',
+                                status: endpoint,
+                            }),
+                        );
+                        ws.close(1000);
+                        return;
+                    }
+
                     bridge(ws, target.address, target.family, Number(rawPort), options, release);
                 });
             })
@@ -246,6 +271,7 @@ function bridge(
             JSON.stringify({
                 type: 'ready',
                 version: 1,
+                transport: 'raknet',
                 maxDatagram: MAX_DATAGRAM,
             }),
         );

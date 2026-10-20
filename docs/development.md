@@ -6,6 +6,10 @@
 - The WASM module links Falcon Protocol and the portable Falcon Network sources
   used by the browser adapter. It is not yet the complete native Network target.
 - The browser can query a RakNet server through the WebSocket/UDP relay.
+- Transport selection is automatic. The relay first probes `GET /v1/join` on
+  the validated destination with a two-second deadline and a 64 KiB response cap.
+  A status containing `name` and `protocol` identifies NetherNet; otherwise the
+  same destination is queried over RakNet.
 - NetherNet signaling encoding and decoding use Falcon Network's `Signal` type
   in WASM. The WebRTC platform adapter is developed separately from the UDP relay.
 - Microsoft authentication, the complete login sequence, NetherNet session

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createSocket } from 'node:dgram';
 import { once } from 'node:events';
+import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { test } from 'node:test';
 import type { TestContext } from 'node:test';
@@ -106,6 +107,7 @@ test(
         assert.deepEqual(JSON.parse(ready.toString()), {
             type: 'ready',
             version: 1,
+            transport: 'raknet',
             maxDatagram: 1492,
         });
 
@@ -181,3 +183,62 @@ test('health endpoint does not expose destination or session data', async (conte
         status: 'ok',
     });
 });
+
+test(
+    'relay detects NetherNet through GET /v1/join before trying RakNet',
+    { timeout: 10000 },
+    async (context) => {
+        const setup = await fixture(context);
+        const destinationPort = setup.udp.address().port;
+        const expected = {
+            name: 'NetherNet fixture',
+            protocol: 2193,
+            version: '1.26.52',
+            level: 'Fixture world',
+            players: 2,
+            maxPlayers: 20,
+        };
+        let receivedDatagram = false;
+
+        setup.udp.on('message', () => {
+            receivedDatagram = true;
+        });
+
+        const endpoint = createServer((request, response) => {
+            assert.equal(request.method, 'GET');
+            assert.equal(request.url, '/v1/join');
+            assert.equal(request.headers.host, `fixture.test:${destinationPort}`);
+
+            response.writeHead(200, {
+                'Content-Type': 'application/json',
+            });
+            response.end(JSON.stringify(expected));
+        });
+
+        endpoint.listen(destinationPort, '127.0.0.1');
+        await once(endpoint, 'listening');
+
+        context.after(
+            () =>
+                new Promise<void>((resolve) => {
+                    endpoint.close(() => resolve());
+                }),
+        );
+
+        const client = new WebSocket(setup.url, {
+            origin,
+        });
+        context.after(() => client.terminate());
+
+        const [message, binary] = await once(client, 'message');
+
+        assert.equal(binary, false);
+        assert.deepEqual(JSON.parse(message.toString()), {
+            type: 'ready',
+            version: 1,
+            transport: 'nethernet',
+            status: expected,
+        });
+        assert.equal(receivedDatagram, false);
+    },
+);

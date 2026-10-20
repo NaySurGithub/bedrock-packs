@@ -7,6 +7,7 @@ export interface QueryModule {
 }
 
 export interface ServerAnnouncement {
+    transport: 'RakNet' | 'NetherNet';
     name: string;
     description: string;
     version: string;
@@ -66,6 +67,7 @@ export function queryServer(
         socket.binaryType = 'arraybuffer';
 
         const timestamp = Date.now() >>> 0;
+        const detectionStarted = performance.now();
         let started = 0;
         let completed = false;
 
@@ -128,6 +130,31 @@ export function queryServer(
                     return;
                 }
 
+                if ('transport' in control && control.transport === 'nethernet') {
+                    if (
+                        !('status' in control) ||
+                        !control.status ||
+                        typeof control.status !== 'object'
+                    ) {
+                        finish(new Error('Invalid NetherNet status response.'));
+                        return;
+                    }
+
+                    const endpoint = control.status as Record<string, unknown>;
+
+                    finish(undefined, {
+                        transport: 'NetherNet',
+                        name: String(endpoint.name ?? ''),
+                        description: String(endpoint.level ?? ''),
+                        version: String(endpoint.version ?? ''),
+                        protocol: String(endpoint.protocol ?? ''),
+                        players: String(endpoint.players ?? 0),
+                        capacity: String(endpoint.maxPlayers ?? 0),
+                        latency: Math.round(performance.now() - detectionStarted),
+                    });
+                    return;
+                }
+
                 const guid = crypto.getRandomValues(new Uint32Array(2));
                 const length = module.bp_build_ping(timestamp, guid[0]!, guid[1]!);
                 const memory = module.HEAPU8;
@@ -163,6 +190,7 @@ export function queryServer(
             }
 
             finish(undefined, {
+                transport: 'RakNet',
                 name: fields[1] ?? '',
                 description: fields[7] ?? '',
                 version: fields[3] ?? '',
