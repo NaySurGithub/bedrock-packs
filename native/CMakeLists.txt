@@ -1,4 +1,5 @@
 add_executable(bedrock-packs
+    src/auth.cpp
     src/query.cpp
     src/nethernet.cpp
     src/protocol.cpp

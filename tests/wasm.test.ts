@@ -34,6 +34,15 @@ test('Falcon bitstream encodes the RakNet ping fields', () => {
     assert.equal(ping.subarray(9, 25).toString('hex'), '00ffff00fefefefefdfdfdfd12345678');
 });
 
+test('browser authentication configuration comes from Falcon Network', () => {
+    const configuration = JSON.parse(readOutput(native._bp_auth_config()));
+
+    assert.equal(configuration.clientId, '0000000048183522');
+    assert.equal(configuration.deviceType, 'Android');
+    assert.equal(configuration.deviceVersion, '8.0.0');
+    assert.match(configuration.userAgent, /^XAL Android/);
+});
+
 test('Falcon-backed pong parser rejects malformed and unrelated responses', () => {
     const timestamp = 12345;
     const pingLength = native._bp_build_ping(timestamp, 0, 1);
