@@ -5,7 +5,8 @@
 The `Build and deploy` workflow builds the C++ WebAssembly module, the browser
 application, and the relay; checks formatting and TypeScript; and runs the tests.
 Pull requests are verified without publishing. Pushes to `main` deploy the static
-application to GitHub Pages.
+application to GitHub Pages when the repository variable `PAGES_ENABLED` is `true`.
+Builds and downloadable site artifacts work without enabling Pages.
 
 The workflow caches npm downloads, the Emscripten SDK, fetched Falcon dependency
 sources, and C++ compiler output through ccache. Dependency and compiler caches
@@ -13,13 +14,15 @@ are keyed by the pinned SDK and source declarations; compiler output also uses
 source hashes, with a fallback to the previous cache for incremental builds.
 
 1. Push this repository to GitHub with `main` as its default branch.
-2. In **Settings → Pages → Build and deployment**, select **GitHub Actions**.
+2. Confirm that your GitHub plan supports Pages for the repository visibility.
+   In **Settings → Pages → Build and deployment**, select **GitHub Actions**.
 3. Host the relay on a machine with outbound UDP and a TLS reverse proxy.
 4. Add the repository Actions variable `VITE_RELAY_URL`, for example
    `wss://relay.example.net/relay`.
 5. Add the Pages origin to the relay's `RELAY_ORIGINS`, for example
    `https://your-account.github.io`. Origins do not include repository paths.
-6. Push to `main` or run the workflow manually.
+6. Set the repository Actions variable `PAGES_ENABLED` to `true`.
+7. Push to `main` or run the workflow manually.
 
 GitHub Pages hosts HTML, JavaScript, and WASM; it cannot run the UDP relay.
 The app uses relative asset paths and works at `/bedrock-packs/` and at a custom domain.
