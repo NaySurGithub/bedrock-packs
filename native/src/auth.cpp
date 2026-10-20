@@ -12,6 +12,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE const char* bp_auth_config() {
         "{\"clientId\":" + JsonText::quote(config.mClientId) +
         ",\"deviceType\":" + JsonText::quote(config.mDeviceType) +
         ",\"deviceVersion\":" + JsonText::quote(config.mVersion) +
-        ",\"userAgent\":" + JsonText::quote(config.mUserAgent) + "}"
+        ",\"userAgent\":" + JsonText::quote(config.mUserAgent) +
+        ",\"gameVersion\":\"1.26.52\"}"
     );
 }

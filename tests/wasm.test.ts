@@ -40,6 +40,7 @@ test('browser authentication configuration comes from Falcon Network', () => {
     assert.equal(configuration.clientId, '0000000048183522');
     assert.equal(configuration.deviceType, 'Android');
     assert.equal(configuration.deviceVersion, '8.0.0');
+    assert.equal(configuration.gameVersion, '1.26.52');
     assert.match(configuration.userAgent, /^XAL Android/);
 });
 
