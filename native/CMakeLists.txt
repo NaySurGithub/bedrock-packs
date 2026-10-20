@@ -3,6 +3,9 @@ add_executable(bedrock-packs
     src/query.cpp
     src/nethernet.cpp
     src/protocol.cpp
+    src/connection.cpp
+    src/framing.cpp
+    src/client-data.cpp
 )
 
 target_include_directories(bedrock-packs PRIVATE include)
@@ -19,6 +22,8 @@ target_link_options(bedrock-packs PRIVATE
     -sEXPORTED_RUNTIME_METHODS=HEAPU8
     -sFILESYSTEM=0
     -sASSERTIONS=1
+    -sUSE_ZLIB=1
+    -sDISABLE_EXCEPTION_CATCHING=0
 )
 
 set_target_properties(bedrock-packs PROPERTIES

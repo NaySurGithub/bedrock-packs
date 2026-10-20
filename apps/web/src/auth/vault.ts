@@ -10,6 +10,7 @@ export interface AccountStore {
     read(): Promise<{ session: AccountSession | undefined; epoch: string }>;
     save(session: AccountSession, epoch: string): Promise<void>;
     keyPair(name: string, curve: 'P-256' | 'P-384'): Promise<CryptoKeyPair>;
+    agreementKey?(name: string): Promise<CryptoKey>;
     clear(): Promise<void>;
 }
 
@@ -216,9 +217,34 @@ export class AccountVault implements AccountStore {
                 name: 'ECDSA',
                 namedCurve: curve,
             },
-            false,
+            curve === 'P-384',
             ['sign', 'verify'],
         );
+
+        let agreement: CryptoKey | undefined;
+
+        if (curve === 'P-384') {
+            const privateBytes = await crypto.subtle.exportKey('pkcs8', generated.privateKey);
+
+            try {
+                agreement = await crypto.subtle.importKey(
+                    'pkcs8',
+                    privateBytes,
+                    { name: 'ECDH', namedCurve: curve },
+                    false,
+                    ['deriveBits'],
+                );
+                generated.privateKey = await crypto.subtle.importKey(
+                    'pkcs8',
+                    privateBytes,
+                    { name: 'ECDSA', namedCurve: curve },
+                    false,
+                    ['sign'],
+                );
+            } finally {
+                new Uint8Array(privateBytes).fill(0);
+            }
+        }
 
         const transaction = database.transaction('keys', 'readwrite');
         const complete = transactionComplete(transaction);
@@ -231,11 +257,28 @@ export class AccountVault implements AccountStore {
                 pair = request.result as CryptoKeyPair;
             } else {
                 keys.put(pair, name);
+
+                if (agreement) {
+                    keys.put(agreement, `${name}:agreement`);
+                }
             }
         };
 
         await complete;
         return pair;
+    }
+
+    async agreementKey(name: string): Promise<CryptoKey> {
+        const database = await this.#database;
+        const key = (await requestResult(
+            database.transaction('keys').objectStore('keys').get(`${name}:agreement`),
+        )) as CryptoKey | undefined;
+
+        if (!key) {
+            throw new Error('The Minecraft key does not support key agreement. Sign in again.');
+        }
+
+        return key;
     }
 
     async clear(): Promise<void> {

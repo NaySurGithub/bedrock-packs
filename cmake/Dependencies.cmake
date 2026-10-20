@@ -40,3 +40,22 @@ target_include_directories(FalconNetworkBrowser PUBLIC
 )
 
 target_link_libraries(FalconNetworkBrowser PUBLIC FalconProtocol)
+
+include(${CMAKE_SOURCE_DIR}/cmake/BrowserRakNet.cmake)
+
+set(SNAPPY_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(SNAPPY_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
+set(SNAPPY_INSTALL OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    snappy
+    GIT_REPOSITORY https://github.com/google/snappy.git
+    GIT_TAG 1.2.2
+)
+FetchContent_MakeAvailable(snappy)
+
+target_sources(FalconNetworkBrowser PRIVATE
+    ${falcon_network_SOURCE_DIR}/src/Network/CompressedNetworkPeer.cpp
+    ${falcon_network_SOURCE_DIR}/src/Network/BatchedNetworkPeer.cpp
+)
+target_compile_options(FalconNetworkBrowser PRIVATE -sUSE_ZLIB=1)
+target_link_libraries(FalconNetworkBrowser PUBLIC snappy)
