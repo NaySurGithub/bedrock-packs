@@ -31,6 +31,8 @@ Falcon Network and Falcon Protocol provide the shared networking and packet code
 
 Microsoft authentication and CDN requests are separate HTTP flows. Their browser integration must account for each endpoint's CORS policy; the UDP relay does not proxy HTTP.
 
+Sign-in uses Microsoft's device-code flow. Account credentials are encrypted in browser IndexedDB and refreshed automatically. The relay provides a separate, restricted authentication route for provider requests. See [Authentication](docs/authentication.md) for storage, sign-out, and relay trust details.
+
 ## Getting started
 
 Requirements: Node.js 24 or later, npm, and [Emscripten SDK 4.0.23](https://emscripten.org/docs/getting_started/downloads.html). Activate Emscripten in your shell, or set `EMSDK` to its installation directory.

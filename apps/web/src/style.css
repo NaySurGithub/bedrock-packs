@@ -299,6 +299,140 @@ dd {
     font-size: 11px;
 }
 
+.account-dialog {
+    width: min(460px, calc(100vw - 32px));
+    padding: 26px;
+    border: 1px solid #343b47;
+    border-radius: 8px;
+    background: #181a1e;
+    color: #d9dce2;
+    box-shadow: 0 24px 80px #0008;
+}
+
+.account-dialog::backdrop {
+    background: #0009;
+}
+
+.dialog-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.dialog-close {
+    padding: 0 4px;
+    border: 0;
+    background: transparent;
+    color: #929eaf;
+    font-size: 25px;
+    line-height: 1;
+}
+
+.account-dialog p {
+    font-size: 13px;
+    line-height: 1.7;
+}
+
+#account-message {
+    margin: 0 0 20px;
+    color: #b4bdcc;
+}
+
+#account-message.account-error {
+    color: #ef9b9b;
+}
+
+#device-panel > p:first-child {
+    margin: 0 0 10px;
+    color: #949eae;
+    font-size: 12px;
+}
+
+.device-code-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid #353b45;
+    border-radius: 5px;
+    background: #101113;
+}
+
+#device-code {
+    color: #edf0f6;
+    font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+    font-size: 23px;
+    letter-spacing: 2px;
+    user-select: all;
+}
+
+.secondary-button {
+    min-height: 34px;
+    padding: 7px 11px;
+    border: 1px solid #353b45;
+    border-radius: 4px;
+    background: transparent;
+    color: #b4bdcc;
+    font-size: 12px;
+}
+
+.secondary-button:hover {
+    background: #242931;
+}
+
+.verification-link {
+    display: inline-block;
+    margin-top: 16px;
+    color: #91adf7;
+    font-size: 13px;
+    text-decoration: none;
+}
+
+.verification-link:hover {
+    text-decoration: underline;
+}
+
+.account-dialog .account-secondary,
+.account-dialog .account-storage-note {
+    color: #818da0;
+    font-size: 11px;
+}
+
+.account-dialog .account-storage-note {
+    margin: 24px 0 0;
+    padding-top: 16px;
+    border-top: 1px solid #2a2f37;
+}
+
+.account-details {
+    display: grid;
+    grid-template-columns: 90px minmax(0, 1fr);
+    gap: 12px;
+    font-size: 13px;
+}
+
+.account-details[hidden],
+.dialog-actions button[hidden] {
+    display: none;
+}
+
+.dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 20px;
+}
+
+.dialog-actions .primary-button {
+    min-height: 34px;
+    margin: 0;
+}
+
 @media (max-width: 900px) {
     .app-header {
         padding: 0 24px;

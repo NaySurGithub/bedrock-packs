@@ -1,9 +1,12 @@
+import type { AuthConfig } from './auth/types.js';
+
 export interface QueryModule {
     HEAPU8: Uint8Array;
     bp_buffer(): number;
     bp_capacity(): number;
     bp_build_ping(timestamp: number, guidHigh: number, guidLow: number): number;
     bp_read_pong(length: number, expectedTimestamp: number): number;
+    authConfig(): AuthConfig;
 }
 
 export interface ServerAnnouncement {
@@ -30,6 +33,19 @@ export async function loadQueryModule(): Promise<QueryModule> {
         bp_capacity: native._bp_capacity,
         bp_build_ping: native._bp_build_ping,
         bp_read_pong: native._bp_read_pong,
+        authConfig() {
+            if (typeof native._bp_auth_config !== 'function') {
+                throw new Error('Rebuild the WebAssembly client to enable Microsoft sign-in.');
+            }
+
+            const pointer = native._bp_auth_config();
+            const length = native._bp_output_size();
+            const json = new TextDecoder().decode(
+                native.HEAPU8.subarray(pointer, pointer + length),
+            );
+
+            return JSON.parse(json) as AuthConfig;
+        },
     };
 }
 

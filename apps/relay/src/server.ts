@@ -5,6 +5,8 @@ import { WebSocket, WebSocketServer } from 'ws';
 import { resolveTarget } from './policy.js';
 import type { DestinationPolicy } from './policy.js';
 import { probeEndpoint } from './probe.js';
+import { createAuthHandler } from './auth.js';
+import type { AuthForwarder } from './auth.js';
 
 export interface RelayOptions {
     origins: ReadonlySet<string>;
@@ -14,6 +16,7 @@ export interface RelayOptions {
     idleTimeoutMs?: number;
     sessionTimeoutMs?: number;
     resolve?: typeof resolveTarget;
+    authForwarder?: AuthForwarder;
 }
 
 const MAX_DATAGRAM = 1492;
@@ -22,10 +25,14 @@ const MAX_BYTES = 512 * 1024 * 1024;
 const MAX_PACKETS_PER_SECOND = 1000;
 
 export function createRelay(options: RelayOptions) {
+    const authenticate = createAuthHandler(options.origins, options.authForwarder);
+
     const server = createServer((request, response) => {
         response.setHeader('Cache-Control', 'no-store');
         response.setHeader('X-Content-Type-Options', 'nosniff');
-        if (request.method === 'GET' && request.url === '/healthz') {
+        if (request.url === '/auth') {
+            void authenticate(request, response);
+        } else if (request.method === 'GET' && request.url === '/healthz') {
             response.writeHead(200, {
                 'Content-Type': 'application/json',
             });

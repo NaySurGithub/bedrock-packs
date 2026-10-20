@@ -19,6 +19,8 @@ source hashes, with a fallback to the previous cache for incremental builds.
 3. Host the relay on a machine with outbound UDP and a TLS reverse proxy.
 4. Add the repository Actions variable `VITE_RELAY_URL`, for example
    `wss://relay.example.net/relay`.
+   Authentication defaults to `/auth` on that relay's origin. Set `VITE_AUTH_URL`
+   explicitly if the authentication relay uses a different address.
 5. Add the Pages origin to the relay's `RELAY_ORIGINS`, for example
    `https://your-account.github.io`. Origins do not include repository paths.
 6. Set the repository Actions variable `PAGES_ENABLED` to `true`.
@@ -51,6 +53,12 @@ Use WSS in production. Forward WebSocket upgrades to `/relay`, retain the browse
 `Origin` header, and expose `/healthz` for readiness checks. By default the relay
 permits only public destination addresses and does not trust forwarded IP headers.
 DNS is resolved once; the UDP socket connects to the validated IP.
+
+Forward `POST` and `OPTIONS` requests for `/auth` to the same process. This route
+needs outbound HTTPS access to Microsoft's authentication services. It enforces
+the same `RELAY_ORIGINS` allowlist, including on cross-origin requests. Credentials
+remain in browser storage; the relay forwards them transiently without saving them.
+See [Authentication](authentication.md) for the trust boundary and storage design.
 
 The relay limits sessions, datagram size, packet rate, total transferred bytes,
 buffered output, idle time, and total session lifetime. For public deployment,

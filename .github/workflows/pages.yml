@@ -20,6 +20,7 @@ jobs:
         timeout-minutes: 25
         env:
             VITE_RELAY_URL: ${{ vars.VITE_RELAY_URL }}
+            VITE_AUTH_URL: ${{ vars.VITE_AUTH_URL }}
             CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
             CCACHE_BASEDIR: ${{ github.workspace }}
             CMAKE_CXX_COMPILER_LAUNCHER: ccache

@@ -1,5 +1,6 @@
 import './style.css';
-import { loadQueryModule, queryServer } from './query';
+import { loadQueryModule, queryServer } from './query.js';
+import { mountAccount } from './auth/ui.js';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
@@ -12,14 +13,14 @@ app.innerHTML = `
             </svg>
             <span>Bedrock Packs</span>
         </a>
-        <button class="account-button" type="button" disabled title="Microsoft sign-in is being integrated">
+        <button id="account" class="account-button" type="button" disabled>
             <svg viewBox="0 0 20 20" aria-hidden="true">
                 <path fill="#f35325" d="M1 1h8v8H1z" />
                 <path fill="#81bc06" d="M11 1h8v8h-8z" />
                 <path fill="#05a6f0" d="M1 11h8v8H1z" />
                 <path fill="#ffba08" d="M11 11h8v8h-8z" />
             </svg>
-            Sign in with Microsoft
+            <span class="account-label">Sign in with Microsoft</span>
         </button>
     </header>
 
@@ -112,13 +113,22 @@ const status = document.querySelector<HTMLParagraphElement>('#status')!;
 const runtime = document.querySelector<HTMLSpanElement>('#runtime')!;
 const result = document.querySelector<HTMLDListElement>('#result')!;
 const modulePromise = loadQueryModule();
+let unmountAccount: (() => void) | undefined;
 
 let active: AbortController | undefined;
 
 void modulePromise
-    .then(() => {
+    .then((module) => {
         runtime.textContent = 'Client ready';
         button.disabled = false;
+        const accountButton = document.querySelector<HTMLButtonElement>('#account')!;
+
+        try {
+            unmountAccount = mountAccount(accountButton, module.authConfig());
+        } catch (error: unknown) {
+            accountButton.title =
+                error instanceof Error ? error.message : 'Account services are unavailable.';
+        }
     })
     .catch(() => {
         runtime.textContent = 'Client unavailable';
@@ -173,3 +183,9 @@ form.addEventListener('submit', (event) => {
 });
 
 window.addEventListener('pagehide', () => active?.abort());
+
+if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+        unmountAccount?.();
+    });
+}

@@ -12,8 +12,11 @@
   same destination is queried over RakNet.
 - NetherNet signaling encoding and decoding use Falcon Network's `Signal` type
   in WASM. The WebRTC platform adapter is developed separately from the UDP relay.
-- Microsoft authentication, the complete login sequence, NetherNet session
-  negotiation, and resource-pack export are not yet connected to the interface.
+- Microsoft device-code sign-in, Xbox authorization, Minecraft identity tokens,
+  encrypted browser persistence, refresh, and sign-out are connected to the account
+  interface. See [Authentication](authentication.md).
+- The Bedrock server login sequence, NetherNet session negotiation, and
+  resource-pack export are not yet connected to the interface.
 
 ## Browser port
 
