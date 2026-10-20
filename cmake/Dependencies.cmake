@@ -29,6 +29,7 @@ FetchContent_MakeAvailable(falcon_nbt falcon_protocol falcon_network)
 add_library(FalconNetworkBrowser STATIC
     ${falcon_network_SOURCE_DIR}/src/RakNet/BitStream.cpp
     ${falcon_network_SOURCE_DIR}/src/Network/ServerQuery.cpp
+    ${falcon_network_SOURCE_DIR}/src/Network/JsonText.cpp
     ${falcon_network_SOURCE_DIR}/src/Network/NetherNet/NetherNetSignal.cpp
     ${falcon_network_SOURCE_DIR}/src/Network/NetherNet/NetherNetCredentials.cpp
 )

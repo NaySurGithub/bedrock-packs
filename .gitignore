@@ -3,6 +3,7 @@ dist/
 .tools/
 .build/
 .cache/
+emsdk-cache/
 .env
 .env.*
 !.env.example

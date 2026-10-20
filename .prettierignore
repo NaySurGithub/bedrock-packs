@@ -1,6 +1,7 @@
 .tools/
 .build/
 .cache/
+emsdk-cache/
 node_modules/
 dist/
 package-lock.json
