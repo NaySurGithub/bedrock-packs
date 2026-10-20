@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.tools/
+.build/
+.cache/
+.env
+.env.*
+!.env.example
+apps/web/public/wasm/
+apps/web/public/third-party/
+*.log
+coverage/
+.DS_Store
+Thumbs.db

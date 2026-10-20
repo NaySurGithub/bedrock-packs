@@ -1,0 +1,14 @@
+Bedrock Packs
+Copyright (c) 2026 Bedrock Packs contributors
+
+Runtime and development dependencies retain their respective licenses.
+No Minecraft assets are included.
+
+The WebAssembly build links Falcon Protocol, Falcon NBT, and portable sources
+from Falcon Network. These components are licensed under LGPL-3.0 and their
+accompanying GPL-3.0 terms. Dependency revisions are pinned in
+cmake/Dependencies.cmake. Their license texts and source/relinking instructions
+are distributed with the web build under third-party/.
+
+Kestrel was inspected as an architectural reference; its sources are not
+included in this implementation.

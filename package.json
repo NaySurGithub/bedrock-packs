@@ -1,0 +1,29 @@
+{
+    "name": "bedrock-packs",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "engines": {
+        "node": ">=24"
+    },
+    "workspaces": [
+        "apps/*"
+    ],
+    "scripts": {
+        "dev": "npm run dev --workspace @bedrock-packs/web",
+        "relay": "npm run dev --workspace @bedrock-packs/relay",
+        "build:wasm": "node scripts/build-wasm.mjs",
+        "build": "npm run build:wasm && npm run build --workspaces",
+        "check": "npm run check --workspaces && tsc -p tsconfig.tests.json",
+        "test": "node --import tsx --test apps/relay/test/*.test.ts tests/*.test.ts",
+        "format": "prettier --write .",
+        "format:check": "prettier --check ."
+    },
+    "devDependencies": {
+        "@types/node": "24.19.2",
+        "@types/ws": "8.18.2",
+        "prettier": "3.9.10",
+        "tsx": "4.23.15",
+        "typescript": "7.0.2"
+    }
+}

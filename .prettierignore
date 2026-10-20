@@ -1,0 +1,11 @@
+.tools/
+.build/
+.cache/
+node_modules/
+dist/
+package-lock.json
+apps/web/public/wasm/
+apps/web/public/third-party/
+native/
+LICENSE
+NOTICE

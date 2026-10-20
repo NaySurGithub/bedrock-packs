@@ -1,0 +1,14 @@
+{
+    "name": "@bedrock-packs/web",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "vite --host 127.0.0.1",
+        "build": "tsc --noEmit && vite build",
+        "check": "tsc --noEmit"
+    },
+    "devDependencies": {
+        "vite": "8.3.4"
+    }
+}

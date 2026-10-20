@@ -1,0 +1,102 @@
+name: Build and deploy
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: pages-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    build:
+        name: Build and verify
+        runs-on: ubuntu-24.04
+        timeout-minutes: 25
+        env:
+            VITE_RELAY_URL: ${{ vars.VITE_RELAY_URL }}
+            CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
+            CCACHE_BASEDIR: ${{ github.workspace }}
+            CMAKE_CXX_COMPILER_LAUNCHER: ccache
+        steps:
+            - name: Check out source
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+            - name: Set up Node.js
+              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+              with:
+                  node-version: '24'
+                  cache: npm
+
+            - name: Set up Emscripten
+              uses: emscripten-core/setup-emsdk@4528d102f7230f0e7b276855c01ea1159be0e984 # v16
+              with:
+                  version: '4.0.23'
+                  actions-cache-folder: emsdk-cache
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Restore Falcon dependencies
+              uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: .cache/fetchcontent
+                  key: falcon-${{ runner.os }}-emsdk-4.0.23-${{ hashFiles('cmake/Dependencies.cmake') }}
+
+            - name: Restore C++ compiler cache
+              uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: .cache/ccache
+                  key: cxx-${{ runner.os }}-emsdk-4.0.23-${{ hashFiles('cmake/Dependencies.cmake', 'native/**', 'CMakeLists.txt') }}
+                  restore-keys: |
+                      cxx-${{ runner.os }}-emsdk-4.0.23-
+
+            - name: Install compiler cache
+              run: sudo apt-get update && sudo apt-get install --yes ccache
+
+            - name: Check formatting
+              run: npm run format:check
+
+            - name: Check TypeScript
+              run: npm run check
+
+            - name: Build WebAssembly, relay, and website
+              run: npm run build
+
+            - name: Test protocol and transport
+              run: npm test
+
+            - name: Report compiler cache statistics
+              if: always()
+              run: ccache --show-stats
+
+            - name: Upload Pages artifact
+              if: github.event_name != 'pull_request'
+              uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+              with:
+                  path: apps/web/dist
+
+    deploy:
+        name: Deploy to GitHub Pages
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        needs: build
+        runs-on: ubuntu-24.04
+        timeout-minutes: 10
+        permissions:
+            pages: write
+            id-token: write
+        environment:
+            name: github-pages
+            url: ${{ steps.deployment.outputs.page_url }}
+        steps:
+            - name: Configure Pages
+              uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+            - name: Deploy
+              id: deployment
+              uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
