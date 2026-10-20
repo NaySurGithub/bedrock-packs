@@ -1,3 +1,6 @@
+import type { ServerAnnouncement } from './query.js';
+import { mountConnectionError } from './connection/error-dialog.js';
+import { mountPacks } from './packs/ui.js';
 import './style.css';
 import { loadQueryModule } from './query.js';
 import { mountAccount } from './auth/ui.js';
@@ -114,6 +117,8 @@ const button = document.querySelector<HTMLButtonElement>('#connect')!;
 const status = document.querySelector<HTMLParagraphElement>('#status')!;
 const runtime = document.querySelector<HTMLSpanElement>('#runtime')!;
 const result = document.querySelector<HTMLDListElement>('#result')!;
+const packList = mountPacks(document.querySelector<HTMLElement>('.packs-panel')!);
+const connectionError = mountConnectionError(app);
 const modulePromise = loadQueryModule();
 let unmountAccount: (() => void) | undefined;
 let account: AccountClient | undefined;
@@ -140,6 +145,28 @@ void modulePromise
         status.textContent = 'Build the WebAssembly module before connecting.';
     });
 
+function showServer(server: ServerAnnouncement): void {
+    result.replaceChildren();
+
+    for (const [label, value] of [
+        ['Server', server.name],
+        ['Transport', server.transport],
+        ['Version', server.version],
+        ['Protocol', server.protocol],
+        ['Players', `${server.players} / ${server.capacity}`],
+        ['Latency', `${server.latency} ms`],
+    ]) {
+        const term = document.createElement('dt');
+        const detail = document.createElement('dd');
+
+        term.textContent = label ?? '';
+        detail.textContent = value ?? '';
+        result.append(term, detail);
+    }
+
+    result.hidden = false;
+}
+
 form.addEventListener('submit', (event) => {
     event.preventDefault();
 
@@ -147,9 +174,13 @@ form.addEventListener('submit', (event) => {
         active.abort();
         active = undefined;
         button.textContent = 'Join server';
+        status.textContent = 'Connection cancelled.';
+        packList.stop(status.textContent);
         return;
     }
 
+    connectionError.dismiss();
+    packList.reset();
     active = new AbortController();
     const attempt = active;
 
@@ -167,45 +198,46 @@ form.addEventListener('submit', (event) => {
                 throw new Error('Microsoft sign-in is unavailable.');
             }
 
-            return connectBedrock(module, account, host, port, signal, (state) => {
-                if (active !== attempt) {
-                    return;
-                }
+            return connectBedrock(
+                module,
+                account,
+                host,
+                port,
+                signal,
+                (state) => {
+                    if (active !== attempt) {
+                        return;
+                    }
 
-                status.textContent = state.message;
+                    status.textContent = state.message;
+                    if (state.phase !== 'disconnected')
+                        packList.connection(state.message, state.phase !== 'ready');
+                    if (state.destination) {
+                        document.querySelector<HTMLInputElement>('#host')!.value =
+                            state.destination.host;
+                        document.querySelector<HTMLInputElement>('#port')!.value = String(
+                            state.destination.port,
+                        );
+                    }
+                    if (state.server) showServer(state.server);
 
-                if (state.phase === 'connected') {
-                    button.textContent = 'Disconnect';
-                } else if (state.phase === 'disconnected') {
-                    active = undefined;
-                    button.textContent = 'Join server';
-                }
-            });
-        })
-        .then(({ server }) => {
-            if (active !== attempt) {
-                return;
-            }
-
-            result.replaceChildren();
-
-            for (const [label, value] of [
-                ['Server', server.name],
-                ['Transport', server.transport],
-                ['Version', server.version],
-                ['Protocol', server.protocol],
-                ['Players', `${server.players} / ${server.capacity}`],
-                ['Latency', `${server.latency} ms`],
-            ]) {
-                const term = document.createElement('dt');
-                const detail = document.createElement('dd');
-
-                term.textContent = label ?? '';
-                detail.textContent = value ?? '';
-                result.append(term, detail);
-            }
-
-            result.hidden = false;
+                    if (state.phase === 'transferring') {
+                        result.hidden = true;
+                        button.textContent = 'Cancel';
+                    } else if (state.phase === 'connected') {
+                        button.textContent = 'Disconnect';
+                    } else if (state.phase === 'disconnected') {
+                        active = undefined;
+                        button.textContent = 'Join server';
+                        packList.stop(state.message);
+                        result.hidden = true;
+                        if (state.outcome === 'error') connectionError.show(state.message);
+                    }
+                },
+                (packs) => {
+                    if (active === attempt) packList.update(packs);
+                },
+            );
         })
         .catch((error: unknown) => {
             if (active !== attempt) {
@@ -215,6 +247,9 @@ form.addEventListener('submit', (event) => {
             active = undefined;
             button.textContent = 'Join server';
             status.textContent = error instanceof Error ? error.message : 'Connection failed.';
+            packList.stop(status.textContent);
+            result.hidden = true;
+            if (!signal.aborted) connectionError.show(status.textContent);
         });
 });
 
@@ -224,5 +259,7 @@ if (import.meta.hot) {
     import.meta.hot.dispose(() => {
         active?.abort();
         unmountAccount?.();
+        packList.dispose();
+        connectionError.dispose();
     });
 }

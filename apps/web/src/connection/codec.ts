@@ -1,3 +1,5 @@
+import type { ClientProfile } from './profile.js';
+import type { PackEvent } from '../packs/types.js';
 export interface NativeConnection {
     HEAPU8: Uint8Array;
     _bp_buffer(): number;
@@ -29,15 +31,20 @@ export interface NativeConnection {
     _bp_client_handshake(): number;
     _bp_cache_status(): number;
     _bp_packet_read(length: number): number;
+    _bp_pack_response(length: number): number;
+    _bp_pack_request(length: number): number;
+    _bp_pack_chunk(): number;
     _bp_sdp_read(length: number): number;
     _bp_sdp_identity(length: number): number;
 }
 
 export type LoginPacket =
+    | PackEvent
     | { type: 'settings'; algorithm: number; threshold: number }
     | { type: 'handshake'; token: string }
     | { type: 'status'; status: number }
-    | { type: 'disconnect'; message: string }
+    | { type: 'disconnect'; message: string; reason: number }
+    | { type: 'transfer'; host: string; port: number; reloadWorld: boolean }
     | { type: 'packet'; id: number }
     | { type: 'invalid' };
 
@@ -92,10 +99,23 @@ export class BrowserCodec {
         return this.output(this.native._bp_login(this.jsonInput({ auth, client }), protocol));
     }
 
-    clientData(address: string, name: string, version: string, playFabId: string): string {
-        return this.text(
-            this.native._bp_client_data(this.jsonInput({ address, name, version, playFabId })),
+    clientData(
+        address: string,
+        name: string,
+        version: string,
+        playFabId: string,
+        profile: ClientProfile,
+    ): string {
+        const claims = this.text(
+            this.native._bp_client_data(
+                this.jsonInput({ address, name, version, playFabId, profile }),
+            ),
         );
+        if (!claims)
+            throw new Error(
+                'Could not create a consistent login profile. Rebuild the client and sign in again.',
+            );
+        return claims;
     }
 
     send(packet: Uint8Array): Uint8Array<ArrayBuffer>[] {
@@ -135,9 +155,21 @@ export class BrowserCodec {
     }
 
     read(packet: Uint8Array): LoginPacket {
-        return JSON.parse(
+        const event = JSON.parse(
             this.text(this.native._bp_packet_read(this.input(packet))),
         ) as LoginPacket;
+        if (event.type === 'pack-chunk') {
+            event.data = this.output(this.native._bp_pack_chunk());
+        }
+        return event;
+    }
+
+    packResponse(status: number, packs: string[] = []): Uint8Array<ArrayBuffer> {
+        return this.output(this.native._bp_pack_response(this.jsonInput({ status, packs })));
+    }
+
+    packRequest(id: string, version: string, index: number): Uint8Array<ArrayBuffer> {
+        return this.output(this.native._bp_pack_request(this.jsonInput({ id, version, index })));
     }
 
     description(sdp: string): SessionDescription {

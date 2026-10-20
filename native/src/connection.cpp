@@ -27,8 +27,9 @@ extern "C" {
             return 0;
         }
 
-        // The relay owns DNS and the destination. This address stays inside WASM.
-        bedrock_packs::remote_address.FromString("127.0.0.1", static_cast<unsigned short>(port));
+        // The relay owns DNS and the destination. RakPeer normalizes IPv4 peers to
+        // IPv4-mapped IPv6; socket routing and received packets must use that same identity.
+        bedrock_packs::remote_address.FromString("::ffff:127.0.0.1", static_cast<unsigned short>(port));
         peer = std::make_unique<RakNet::RakPeer>();
         RakNet::SocketDescriptor descriptor;
 

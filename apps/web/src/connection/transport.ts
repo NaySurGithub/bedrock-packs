@@ -96,6 +96,24 @@ export function relayUrl(path: '/relay' | '/signal', host: string, port: number)
     return url;
 }
 
+export function raknetDisconnectMessage(id: number): string | undefined {
+    const messages: Record<number, string> = {
+        0x0a: 'RakNet: the server requires a public key.',
+        0x0b: 'RakNet: the server requires a secure connection.',
+        0x0c: 'RakNet: the server public key does not match.',
+        0x11: 'RakNet: the connection attempt failed.',
+        0x12: 'RakNet: this client is already connected.',
+        0x14: 'RakNet: the server is full.',
+        0x15: 'RakNet: the server closed the connection.',
+        0x16: 'RakNet: the connection to the server was lost.',
+        0x17: 'RakNet: the server has banned this connection.',
+        0x18: 'RakNet: the server rejected the password.',
+        0x19: 'RakNet: the server uses an incompatible protocol version.',
+        0x1a: 'RakNet: this IP connected too recently. Try again shortly.',
+    };
+    return messages[id];
+}
+
 export async function connectRakNet(
     codec: BrowserCodec,
     host: string,
@@ -164,8 +182,9 @@ export async function connectRakNet(
                     resolveConnected?.();
                 } else if (packet[0] === 0xfe && accepted) {
                     queue.push(packet);
-                } else if ([0x11, 0x12, 0x14, 0x15, 0x16, 0x17, 0x19].includes(packet[0]!)) {
-                    throw new Error('The server refused or closed the RakNet connection.');
+                } else {
+                    const reason = raknetDisconnectMessage(packet[0]!);
+                    if (reason) throw new Error(reason);
                 }
             }
         } catch (error) {
@@ -175,7 +194,14 @@ export async function connectRakNet(
 
     signal.addEventListener('abort', abort, { once: true });
     socket.onerror = () => close(new Error('Could not connect to the relay.'));
-    socket.onclose = () => close(new Error('The relay closed the connection.'));
+    socket.onclose = (event) =>
+        close(
+            new Error(
+                event.reason
+                    ? `RakNet relay: ${event.reason} (code ${event.code}).`
+                    : `The RakNet relay closed the connection (code ${event.code}).`,
+            ),
+        );
     socket.onmessage = (event: MessageEvent<unknown>) => {
         try {
             if (typeof event.data === 'string' && !started) {

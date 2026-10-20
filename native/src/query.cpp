@@ -11,7 +11,7 @@
 
 namespace {
     constexpr uint32_t DatagramCapacity = 1492;
-    constexpr uint32_t BufferCapacity = 1024 * 1024;
+    constexpr uint32_t BufferCapacity = 8 * 1024 * 1024;
 
     uint8_t buffer[BufferCapacity];
 }

@@ -38,6 +38,11 @@ in IndexedDB. Tokens are not stored in localStorage, cookies, URLs, DOM attribut
 application logs, or BroadcastChannel messages. Microsoft device-session cookies
 exist only in memory while completing the device-code flow.
 
+The separate `bedrock-packs.client-profile.v1` localStorage entry contains only
+opaque random client, self-signed and skin identifiers. It contains no account
+credentials, tokens, XUID, or device proof keys. When localStorage is unavailable,
+these identifiers are retained only in memory.
+
 The browser restores and renews the session after reload. Web Locks serialize
 refreshes across tabs where supported. A storage generation prevents an in-flight
 refresh from recreating credentials after sign-out. Sign-out clears the encrypted

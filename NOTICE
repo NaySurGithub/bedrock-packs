@@ -15,3 +15,6 @@ probe GET /v1/join before falling back to RakNet. No SolarProxy source is copied
 
 Kestrel was inspected as an architectural reference; its sources are not
 included in this implementation.
+
+Pack ZIP processing uses fflate (MIT). AES-256-CFB8 uses aes-js (MIT).
+Their license texts are distributed under third-party/ with the web build.

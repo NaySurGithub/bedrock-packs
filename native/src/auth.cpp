@@ -2,6 +2,7 @@
 
 #include "Network/Auth/XboxLiveConfig.h"
 #include "Network/JsonText.h"
+#include "Protocol/ProtocolInfo.h"
 
 #include <emscripten/emscripten.h>
 
@@ -13,6 +14,6 @@ extern "C" EMSCRIPTEN_KEEPALIVE const char* bp_auth_config() {
         ",\"deviceType\":" + JsonText::quote(config.mDeviceType) +
         ",\"deviceVersion\":" + JsonText::quote(config.mVersion) +
         ",\"userAgent\":" + JsonText::quote(config.mUserAgent) +
-        ",\"gameVersion\":\"1.26.52\"}"
+        ",\"gameVersion\":" + JsonText::quote(ProtocolInfo::MINECRAFT_VERSION_NETWORK) + "}"
     );
 }

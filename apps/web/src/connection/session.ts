@@ -1,3 +1,9 @@
+import { createClientProfile } from './profile.js';
+import { followTransfers, transferTarget } from './routing.js';
+import type { EndpointResult, ServerTarget } from './routing.js';
+import { PackTransfer } from '../packs/transfer.js';
+import { processPack } from '../packs/process.js';
+import type { PackView } from '../packs/types.js';
 import type { AccountClient } from '../auth/client.js';
 import type { QueryModule, ServerAnnouncement } from '../query.js';
 import { queryServer } from '../query.js';
@@ -8,15 +14,20 @@ import { connectNetherNet } from './nethernet.js';
 import { connectRakNet } from './transport.js';
 import type { BedrockTransport } from './transport.js';
 
-export interface BedrockSession {
-    server: ServerAnnouncement;
-    close(): void;
-}
-
 export interface ConnectionState {
     phase:
-        'authenticating' | 'detecting' | 'connecting' | 'logging-in' | 'connected' | 'disconnected';
+        | 'authenticating'
+        | 'detecting'
+        | 'connecting'
+        | 'logging-in'
+        | 'connected'
+        | 'transferring'
+        | 'ready'
+        | 'disconnected';
     message: string;
+    outcome?: 'error' | 'cancelled' | 'completed';
+    server?: ServerAnnouncement;
+    destination?: ServerTarget;
 }
 
 let inUse = false;
@@ -63,26 +74,74 @@ export async function connectBedrock(
     port: number,
     signal: AbortSignal,
     changed: (state: ConnectionState) => void,
-): Promise<BedrockSession> {
-    if (inUse) {
-        throw new Error('Disconnect the current server before connecting again.');
+    packsChanged: (packs: PackView[]) => void = () => {},
+): Promise<void> {
+    if (inUse) throw new Error('Disconnect the current server before connecting again.');
+    signal.throwIfAborted();
+    inUse = true;
+    const retained = new Map<string, PackView>();
+    try {
+        const message = await followTransfers(
+            { host, port },
+            signal,
+            (target) =>
+                connectEndpoint(
+                    module,
+                    account,
+                    target.host,
+                    target.port,
+                    signal,
+                    changed,
+                    (packs) => {
+                        const merged = new Map(retained);
+                        for (const pack of packs) {
+                            const ready = retained.get(pack.id);
+                            if (!ready || ready.version !== pack.version || pack.status === 'ready')
+                                merged.set(pack.id, pack);
+                        }
+                        for (const pack of packs)
+                            if (pack.status === 'ready') retained.set(pack.id, pack);
+                        packsChanged([...merged.values()]);
+                    },
+                ),
+            (destination, count) => {
+                packsChanged([...retained.values()]);
+                changed({
+                    phase: 'transferring',
+                    destination,
+                    message: `Transfer ${count}: connecting to ${destination.host}:${destination.port}…`,
+                });
+            },
+        );
+        changed({ phase: 'disconnected', message, outcome: 'cancelled' });
+    } finally {
+        inUse = false;
     }
+}
 
+async function connectEndpoint(
+    module: QueryModule,
+    account: AccountClient,
+    host: string,
+    port: number,
+    signal: AbortSignal,
+    changed: (state: ConnectionState) => void,
+    packsChanged: (packs: PackView[]) => void,
+): Promise<EndpointResult> {
     signal.throwIfAborted();
     const codec = new BrowserCodec(module.connection);
-    inUse = true;
     let transport: BedrockTransport | undefined;
     let cipher: GameCipher | undefined;
     let closed = false;
     let connected = false;
-    let rejectLogin: ((error: Error) => void) | undefined;
+    let finish!: (result: EndpointResult) => void;
+    const finished = new Promise<EndpointResult>((resolve) => {
+        finish = resolve;
+    });
     const controller = new AbortController();
 
-    const close = (error = new Error('Disconnected.')) => {
-        if (closed) {
-            return;
-        }
-
+    const close = (result: EndpointResult = { type: 'cancelled', message: 'Disconnected.' }) => {
+        if (closed) return;
         closed = true;
         clearTimeout(deadline);
         signal.removeEventListener('abort', abort);
@@ -90,27 +149,33 @@ export async function connectBedrock(
         controller.abort();
         transport?.close();
         cipher?.dispose();
-        inUse = false;
-        rejectLogin?.(error);
-
-        if (connected) {
-            changed({ phase: 'disconnected', message: error.message });
-        }
+        finish(result);
     };
-    const abort = () => close(new Error('Connection cancelled.'));
-    const deadline = setTimeout(() => close(new Error('The Bedrock login timed out.')), 60000);
+    const abort = () => close({ type: 'cancelled', message: 'Connection cancelled.' });
+    const deadline = setTimeout(
+        () => close({ type: 'error', error: new Error('The Bedrock login timed out.') }),
+        60000,
+    );
     const unsubscribe = account.subscribe((state) => {
         if (state.status === 'signed-out' || state.status === 'error') {
-            queueMicrotask(() => close(new Error('The Microsoft session is no longer available.')));
+            queueMicrotask(() =>
+                close({
+                    type: 'error',
+                    error: new Error('The Microsoft session is no longer available.'),
+                }),
+            );
         }
     });
     signal.addEventListener('abort', abort, { once: true });
 
     try {
-        changed({ phase: 'authenticating', message: 'Preparing Microsoft identity…' });
+        changed({
+            phase: 'authenticating',
+            message: `Preparing Microsoft identity for ${host}:${port}…`,
+        });
         const identity = await account.connectionIdentity();
         controller.signal.throwIfAborted();
-        changed({ phase: 'detecting', message: 'Detecting server transport…' });
+        changed({ phase: 'detecting', message: `Detecting transport for ${host}:${port}…` });
         const server = await queryServer(module, host, port, controller.signal);
         const protocol = Number(server.protocol);
 
@@ -121,7 +186,10 @@ export async function connectBedrock(
         }
 
         controller.signal.throwIfAborted();
-        changed({ phase: 'connecting', message: `Connecting with ${server.transport}…` });
+        changed({
+            phase: 'connecting',
+            message: `Connecting to ${host}:${port} with ${server.transport}…`,
+        });
         transport =
             server.transport === 'NetherNet'
                 ? await connectNetherNet(codec, identity, host, port, controller.signal)
@@ -129,17 +197,20 @@ export async function connectBedrock(
         controller.signal.throwIfAborted();
         codec.start(transport.raknet);
         const address = `${host.includes(':') ? `[${host}]` : host}:${port}`;
+        const clientVersion = module.authConfig().gameVersion;
         const data = codec.clientData(
             address,
             identity.gamertag,
-            server.version,
+            clientVersion,
             identity.identity.playFabId,
+            createClientProfile(identity.deviceId, identity.deviceType, identity.xuid),
         );
         const clientJwt = await signToken(identity, data);
-        const auth = await loginIdentity(identity, server.version);
+        const auth = await loginIdentity(identity, clientVersion);
         controller.signal.throwIfAborted();
 
         const send = async (packet: Uint8Array) => {
+            if (!packet.length) throw new Error('Could not encode the Bedrock packet.');
             for (const batch of codec.send(packet)) {
                 const data = cipher && transport!.raknet ? await cipher.encrypt(batch) : batch;
                 controller.signal.throwIfAborted();
@@ -147,94 +218,132 @@ export async function connectBedrock(
             }
         };
 
+        // Both protocol negotiation and pack requests share the session's encrypted send path.
+        const packs = new PackTransfer(
+            {
+                response: (status, ids) => send(codec.packResponse(status, ids)),
+                request: (id, version, index) => send(codec.packRequest(id, version, index)),
+            },
+            processPack,
+            controller.signal,
+            packsChanged,
+            (count) =>
+                changed({
+                    phase: 'ready',
+                    message: count
+                        ? `${count} pack(s) ready. Staying connected for server transfers.`
+                        : 'No resource packs. Waiting for a server transfer.',
+                }),
+            (error) => close({ type: 'error', error }),
+        );
+
         let sentLogin = false;
         let handshake = false;
-        const authenticated = new Promise<void>((resolve, reject) => {
-            rejectLogin = reject;
+        const run = async () => {
+            await send(codec.settings(protocol));
 
-            const run = async () => {
-                await send(codec.settings(protocol));
+            while (!closed) {
+                const incoming = await transport!.receive();
+                const batch =
+                    cipher && transport!.raknet ? await cipher.decrypt(incoming) : incoming;
+                controller.signal.throwIfAborted();
 
-                while (!closed) {
-                    const incoming = await transport!.receive();
-                    const batch =
-                        cipher && transport!.raknet ? await cipher.decrypt(incoming) : incoming;
-                    controller.signal.throwIfAborted();
+                for (const packet of codec.receive(batch)) {
+                    if (closed) break;
+                    const event = codec.read(packet);
 
-                    for (const packet of codec.receive(batch)) {
-                        const event = codec.read(packet);
+                    switch (event.type) {
+                        case 'settings':
+                            if (
+                                sentLogin ||
+                                !codec.native._bp_compression(event.algorithm, event.threshold)
+                            ) {
+                                throw new Error('Invalid or repeated network settings.');
+                            }
 
-                        switch (event.type) {
-                            case 'settings':
-                                if (
-                                    sentLogin ||
-                                    !codec.native._bp_compression(event.algorithm, event.threshold)
-                                ) {
-                                    throw new Error('Invalid or repeated network settings.');
-                                }
+                            sentLogin = true;
+                            changed({
+                                phase: 'logging-in',
+                                message: 'Signing in to the Bedrock server…',
+                            });
+                            await send(codec.login(protocol, auth, clientJwt));
+                            break;
+                        case 'handshake':
+                            if (!sentLogin || handshake) {
+                                throw new Error('Unexpected server encryption handshake.');
+                            }
 
-                                sentLogin = true;
+                            handshake = true;
+                            cipher = await GameCipher.fromHandshake(identity, event.token);
+                            await send(codec.output(codec.native._bp_client_handshake()));
+                            break;
+                        case 'status':
+                            if (event.status === 0 && sentLogin && !connected) {
+                                await send(codec.output(codec.native._bp_cache_status()));
+                                connected = true;
+                                clearTimeout(deadline);
+                                packs.start();
                                 changed({
-                                    phase: 'logging-in',
-                                    message: 'Signing in to the Bedrock server…',
+                                    phase: 'connected',
+                                    message: `Connected as ${identity.gamertag}.`,
+                                    server,
+                                    destination: { host, port },
                                 });
-                                await send(codec.login(protocol, auth, clientJwt));
-                                break;
-                            case 'handshake':
-                                if (!sentLogin || handshake) {
-                                    throw new Error('Unexpected server encryption handshake.');
-                                }
-
-                                handshake = true;
-                                cipher = await GameCipher.fromHandshake(identity, event.token);
-                                await send(codec.output(codec.native._bp_client_handshake()));
-                                break;
-                            case 'status':
-                                if (event.status === 0 && sentLogin && !connected) {
-                                    await send(codec.output(codec.native._bp_cache_status()));
-                                    connected = true;
-                                    clearTimeout(deadline);
-                                    changed({
-                                        phase: 'connected',
-                                        message: `Connected as ${identity.gamertag}.`,
-                                    });
-                                    resolve();
-                                } else if (event.status !== 0 && event.status !== 3) {
-                                    const failures: Record<number, string> = {
-                                        1: 'The client version is too old.',
-                                        2: 'The server version is too old.',
-                                        7: 'The server is full.',
-                                    };
-                                    throw new Error(
-                                        failures[event.status] ??
-                                            `Bedrock login failed (${event.status}).`,
-                                    );
-                                }
-
-                                break;
-                            case 'disconnect':
+                            } else if (event.status !== 0 && event.status !== 3) {
+                                const failures: Record<number, string> = {
+                                    1: 'The client version is too old.',
+                                    2: 'The server version is too old.',
+                                    7: 'The server is full.',
+                                };
                                 throw new Error(
-                                    event.message || 'Disconnected by the Bedrock server.',
+                                    failures[event.status] ??
+                                        `Bedrock login failed (${event.status}).`,
                                 );
-                            case 'invalid':
-                                throw new Error('The server sent a malformed Bedrock packet.');
-                            case 'packet':
-                                // Login ends before resource-pack negotiation.
-                                break;
-                        }
+                            }
+
+                            break;
+                        case 'transfer':
+                            if (!sentLogin)
+                                throw new Error('The server sent a transfer before login.');
+                            close({
+                                type: 'transfer',
+                                target: transferTarget(event.host, event.port),
+                            });
+                            break;
+                        case 'disconnect':
+                            throw new Error(
+                                event.message ||
+                                    `Disconnected by the Bedrock server (reason ${event.reason}).`,
+                            );
+                        case 'invalid':
+                            throw new Error('The server sent a malformed Bedrock packet.');
+                        case 'packs-info':
+                        case 'pack-data':
+                        case 'pack-chunk':
+                        case 'packs-stack':
+                            if (!connected)
+                                throw new Error('The server sent packs before login completed.');
+                            await packs.handle(event);
+                            break;
+                        case 'packet':
+                            break;
                     }
                 }
-            };
+            }
+        };
 
-            void run().catch((error: unknown) => {
-                close(error instanceof Error ? error : new Error('Bedrock connection failed.'));
+        void run().catch((error: unknown) => {
+            close({
+                type: 'error',
+                error: error instanceof Error ? error : new Error('Bedrock connection failed.'),
             });
         });
-        await authenticated;
-        rejectLogin = undefined;
-        return { server, close: () => close() };
+        return await finished;
     } catch (error) {
-        close();
-        throw error;
+        close({
+            type: 'error',
+            error: error instanceof Error ? error : new Error('Bedrock connection failed.'),
+        });
+        return await finished;
     }
 }

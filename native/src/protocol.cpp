@@ -8,9 +8,16 @@
 #include "Protocol/Packets/NetworkSettingsPacket.h"
 #include "Protocol/Packets/PlayStatusPacket.h"
 #include "Protocol/Packets/DisconnectPacket.h"
+#include "Protocol/Packets/TransferPacket.h"
 #include "Protocol/Packets/ServerToClientHandshakePacket.h"
 #include "Protocol/Packets/ClientToServerHandshakePacket.h"
 #include "Protocol/Packets/ClientCacheStatusPacket.h"
+#include "Protocol/Packets/ResourcePacksInfoPacket.h"
+#include "Protocol/Packets/ResourcePackDataInfoPacket.h"
+#include "Protocol/Packets/ResourcePackChunkDataPacket.h"
+#include "Protocol/Packets/ResourcePackStackPacket.h"
+#include "Protocol/Packets/ResourcePackClientResponsePacket.h"
+#include "Protocol/Packets/ResourcePackChunkRequestPacket.h"
 #include "Network/JsonText.h"
 #include "Core/Json/Json.h"
 #include "Protocol/Types/BlockDefinitionRegistry.h"
@@ -20,8 +27,20 @@
 #include <cstring>
 #include <exception>
 #include <optional>
+#include <stdexcept>
 
 namespace {
+    std::string pack_chunk;
+
+    std::string hex(const std::string& bytes) {
+        std::string result;
+        for (unsigned char byte : bytes) {
+            result += "0123456789abcdef"[byte >> 4];
+            result += "0123456789abcdef"[byte & 15];
+        }
+        return result;
+    }
+
     const BlockDefinitionRegistry blocks;
     const ItemDefinitionRegistry items;
     std::optional<PacketCodecContext> codec(std::in_place, blocks, items);
@@ -75,6 +94,46 @@ extern "C" {
         return encode(packet);
     }
 
+    EMSCRIPTEN_KEEPALIVE const char* bp_pack_response(unsigned int length) {
+        try {
+            if (length > bp_capacity()) return bedrock_packs::set_output({});
+            const auto root = json::parse(std::string(reinterpret_cast<char*>(bp_buffer()), length));
+            const auto* status = root ? root->get("status") : nullptr;
+            const auto* packs = root ? root->get("packs") : nullptr;
+            if (!status || !packs || !packs->isArray() || packs->mArray.size() > 128 ||
+                status->integer() < 1 || status->integer() > 4) return bedrock_packs::set_output({});
+            ResourcePackClientResponsePacket packet;
+            packet.mStatus = static_cast<ResourcePackClientResponsePacket::Status>(status->integer());
+            for (const auto& entry : packs->mArray) {
+                if (!entry->isString() || entry->string().size() > 256) return bedrock_packs::set_output({});
+                packet.mPackIds.push_back(entry->string());
+            }
+            return encode(packet);
+        } catch (const std::exception&) { return bedrock_packs::set_output({}); }
+    }
+
+    EMSCRIPTEN_KEEPALIVE const char* bp_pack_request(unsigned int length) {
+        try {
+            if (length > bp_capacity()) return bedrock_packs::set_output({});
+            const auto root = json::parse(std::string(reinterpret_cast<char*>(bp_buffer()), length));
+            const auto* id = root ? root->get("id") : nullptr;
+            const auto* version = root ? root->get("version") : nullptr;
+            const auto* index = root ? root->get("index") : nullptr;
+            if (!id || !version || !index || !id->isString() || !version->isString() ||
+                id->string().size() != 36 || version->string().size() > 128 || index->integer(-1) < 0)
+                return bedrock_packs::set_output({});
+            ResourcePackChunkRequestPacket packet;
+            packet.mPackId = Uuid::fromString(id->string());
+            packet.mPackVersion = version->string();
+            packet.mChunkIndex = index->integer();
+            return encode(packet);
+        } catch (const std::exception&) { return bedrock_packs::set_output({}); }
+    }
+
+    EMSCRIPTEN_KEEPALIVE const char* bp_pack_chunk() {
+        return bedrock_packs::set_output(std::move(pack_chunk));
+    }
+
     EMSCRIPTEN_KEEPALIVE const char* bp_packet_read(unsigned int length) {
         if (length == 0 || length > bp_capacity()) {
             return bedrock_packs::set_output("{\"type\":\"invalid\"}");
@@ -112,11 +171,76 @@ extern "C" {
                 return bedrock_packs::set_output("{\"type\":\"status\",\"status\":" + std::to_string(static_cast<int>(packet.mStatus)) + "}");
             }
 
+            if (id == ResourcePacksInfoPacket::ID) {
+                ResourcePacksInfoPacket packet;
+                packet.readHeader(stream);
+                codec->getCodec().read(packet, stream, *codec);
+                if (packet.mResourcePackInfos.size() > 128) throw std::runtime_error("Too many packs");
+                std::string result = "{\"type\":\"packs-info\",\"packs\":[";
+                bool first = true;
+                for (const auto& pack : packet.mResourcePackInfos) {
+                    if (!first) result += ',';
+                    first = false;
+                    result += "{\"id\":" + JsonText::quote(pack.mPackId.toString()) +
+                        ",\"version\":" + JsonText::quote(pack.mPackVersion) +
+                        ",\"size\":" + std::to_string(pack.mPackSize) +
+                        ",\"key\":" + JsonText::quote(pack.mContentKey) +
+                        ",\"cdnUrl\":" + JsonText::quote(pack.mCdnUrl) + "}";
+                }
+                return bedrock_packs::set_output(result + "]}");
+            }
+
+            if (id == ResourcePackDataInfoPacket::ID) {
+                ResourcePackDataInfoPacket packet;
+                packet.readHeader(stream);
+                codec->getCodec().read(packet, stream, *codec);
+                return bedrock_packs::set_output(
+                    "{\"type\":\"pack-data\",\"id\":" + JsonText::quote(packet.mPackId.toString()) +
+                    ",\"version\":" + JsonText::quote(packet.mPackVersion) +
+                    ",\"chunkSize\":" + std::to_string(packet.mMaxChunkSize) +
+                    ",\"chunkCount\":" + std::to_string(packet.mChunkCount) +
+                    ",\"size\":" + std::to_string(packet.mCompressedPackSize) +
+                    ",\"hash\":" + JsonText::quote(hex(packet.mHash)) + "}"
+                );
+            }
+
+            if (id == ResourcePackChunkDataPacket::ID) {
+                ResourcePackChunkDataPacket packet;
+                packet.readHeader(stream);
+                codec->getCodec().read(packet, stream, *codec);
+                pack_chunk = std::move(packet.mData);
+                return bedrock_packs::set_output(
+                    "{\"type\":\"pack-chunk\",\"id\":" + JsonText::quote(packet.mPackId.toString()) +
+                    ",\"version\":" + JsonText::quote(packet.mPackVersion) +
+                    ",\"index\":" + std::to_string(packet.mChunkIndex) +
+                    ",\"progress\":" + std::to_string(packet.mProgress) + "}"
+                );
+            }
+
+            if (id == ResourcePackStackPacket::ID) {
+                ResourcePackStackPacket packet;
+                packet.readHeader(stream);
+                codec->getCodec().read(packet, stream, *codec);
+                return bedrock_packs::set_output("{\"type\":\"packs-stack\"}");
+            }
+
+            if (id == TransferPacket::ID) {
+                TransferPacket packet;
+                packet.readHeader(stream);
+                codec->getCodec().read(packet, stream, *codec);
+                return bedrock_packs::set_output(
+                    "{\"type\":\"transfer\",\"host\":" + JsonText::quote(packet.mAddress) +
+                    ",\"port\":" + std::to_string(packet.mPort) +
+                    ",\"reloadWorld\":" + (packet.mReloadWorld ? "true" : "false") + "}"
+                );
+            }
+
             if (id == DisconnectPacket::ID) {
                 DisconnectPacket packet;
                 packet.readHeader(stream);
                 codec->getCodec().read(packet, stream, *codec);
-                return bedrock_packs::set_output("{\"type\":\"disconnect\",\"message\":" + JsonText::quote(packet.mKickMessage) + "}");
+                return bedrock_packs::set_output("{\"type\":\"disconnect\",\"message\":" + JsonText::quote(packet.mKickMessage.empty() ? packet.mFilteredMessage : packet.mKickMessage) +
+                    ",\"reason\":" + std::to_string(packet.mReason) + "}");
             }
 
             return bedrock_packs::set_output("{\"type\":\"packet\",\"id\":" + std::to_string(static_cast<int>(id)) + "}");

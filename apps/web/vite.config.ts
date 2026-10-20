@@ -2,7 +2,7 @@ import { defineConfig, loadEnv } from 'vite';
 
 export default defineConfig(({ mode }) => {
     const environment = loadEnv(mode, process.cwd(), 'VITE_');
-    const connections = new Set(["'self'"]);
+    const connections = new Set(["'self'", 'https:']);
 
     for (const endpoint of [environment.VITE_RELAY_URL, environment.VITE_AUTH_URL]) {
         if (endpoint) {
@@ -21,6 +21,7 @@ export default defineConfig(({ mode }) => {
         "script-src 'self' 'wasm-unsafe-eval'",
         "style-src 'self'",
         `connect-src ${[...connections].join(' ')}`,
+        "worker-src 'self' blob:",
         "object-src 'none'",
         "base-uri 'self'",
         "form-action 'none'",

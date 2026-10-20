@@ -10,7 +10,11 @@
 
 Bedrock Packs brings the Bedrock client protocol to the browser. Its architecture keeps protocol handling and pack processing on the user's device, with a small relay connecting browser WebSockets to a server's UDP endpoint.
 
-The product workflow is straightforward: sign in with Microsoft, enter a server address, join, and download the resource packs offered during the connection. The transport is detected automatically. Packs are decrypted using the content keys provided by that server and exported as `.mcpack` archives.
+The product workflow is straightforward: sign in with Microsoft, enter a server address, join, and download the resource packs offered during the connection. The transport is detected automatically. Packs are decrypted using the content keys provided by that server and exported as `.mcpack` archives. The interface displays download and processing
+progress for each pack. Download packs individually, or use Download all to save
+one ZIP containing the ready `.mcpack` files. The connection stays open after pack
+negotiation to follow server Transfer packets automatically. Ready downloads survive
+transfers and disconnections, until a new connection is started manually or the page is reloaded.
 
 For implementation coverage and development priorities, see [Development](docs/development.md).
 

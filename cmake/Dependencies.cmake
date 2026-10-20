@@ -55,6 +55,11 @@ FetchContent_Declare(
     GIT_TAG 1.2.2
 )
 FetchContent_MakeAvailable(snappy)
+# Clang cannot honor every Snappy vectorization hint when targeting WebAssembly.
+# Keep real compiler errors fatal without rejecting these optimization remarks.
+if(EMSCRIPTEN)
+    target_compile_options(snappy PRIVATE -Wno-error=pass-failed)
+endif()
 
 target_sources(FalconNetworkBrowser PRIVATE
     ${falcon_network_SOURCE_DIR}/src/Network/CompressedNetworkPeer.cpp

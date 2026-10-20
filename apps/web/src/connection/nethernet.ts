@@ -86,6 +86,7 @@ export async function connectNetherNet(
         maxRetransmits: 0,
     });
     let closed = false;
+    let closeError: Error | undefined;
     const controller = new AbortController();
     const deadline = setTimeout(
         () => close(new Error('The NetherNet handshake timed out.')),
@@ -99,6 +100,7 @@ export async function connectNetherNet(
         }
 
         closed = true;
+        closeError = error;
         clearTimeout(deadline);
         signal.removeEventListener('abort', abort);
         controller.abort();
@@ -120,7 +122,7 @@ export async function connectNetherNet(
 
     peer.onconnectionstatechange = () => {
         if (['failed', 'closed'].includes(peer.connectionState)) {
-            close(new Error('The NetherNet connection closed.'));
+            close(new Error(`The NetherNet connection ${peer.connectionState}.`));
         }
     };
     peer.ondatachannel = (event) => {
@@ -131,7 +133,16 @@ export async function connectNetherNet(
     for (const [kind, channel] of [reliable, unreliable].entries()) {
         channel.binaryType = 'arraybuffer';
         channel.onclose = () => close(new Error('The NetherNet data channel closed.'));
-        channel.onerror = () => close(new Error('The NetherNet data channel failed.'));
+        channel.onerror = (event) => {
+            const detail = (event as RTCErrorEvent).error;
+            close(
+                new Error(
+                    detail?.message
+                        ? `NetherNet: ${detail.message}${detail.errorDetail ? ` (${detail.errorDetail})` : ''}`
+                        : 'The NetherNet data channel failed.',
+                ),
+            );
+        };
         channel.onmessage = (event: MessageEvent<unknown>) => {
             try {
                 if (
@@ -235,6 +246,7 @@ export async function connectNetherNet(
         await verifyAnswer(codec, answer.sdp);
         controller.signal.throwIfAborted();
         await peer.setRemoteDescription({ type: 'answer', sdp: answer.sdp });
+        controller.signal.throwIfAborted();
 
         await new Promise<void>((resolve, reject) => {
             rejectPending = reject;
@@ -279,7 +291,8 @@ export async function connectNetherNet(
             close: () => close(),
         };
     } catch (error) {
-        close();
-        throw error;
+        const failure = closeError ?? error;
+        close(failure instanceof Error ? failure : new Error('NetherNet connection failed.'));
+        throw failure;
     }
 }

@@ -862,6 +862,9 @@ export class AccountClient {
     async connectionIdentity(): Promise<{
         identity: MinecraftIdentity;
         gamertag: string;
+        xuid: string;
+        deviceId: string;
+        deviceType: string;
         sign(data: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>>;
         agree(publicKey: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>>;
     }> {
@@ -883,6 +886,9 @@ export class AccountClient {
         return {
             identity,
             gamertag: this.#session.profile.gamertag,
+            xuid: this.#session.profile.xuid,
+            deviceId: this.#session.deviceId,
+            deviceType: this.#config.deviceType,
             async sign(data) {
                 assertActive();
                 const signature = await crypto.subtle.sign(

@@ -16,6 +16,16 @@ await mkdir(destination, {
     recursive: true,
 });
 
+for (const [name, filename] of [
+    ['aes-js', 'LICENSE.txt'],
+    ['fflate', 'LICENSE'],
+]) {
+    await copyFile(
+        resolve(root, 'node_modules', name, filename),
+        resolve(destination, `${name}-LICENSE`),
+    );
+}
+
 const manifest = [];
 
 for (const [, name, repository, revision] of dependencies) {
