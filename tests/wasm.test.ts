@@ -216,7 +216,7 @@ test('Transfer packets decode the destination, custom port and reload-world flag
 });
 
 const profileFixture = {
-    deviceId: '12345678-1234-4234-8234-123456789abc',
+    deviceId: '0123456789abcdef0123456789abcdef',
     deviceType: 'Android',
     platformOnlineId: '2535412345678901',
     selfSignedId: 'abcdefab-1234-4234-8234-123456789abc',
@@ -320,6 +320,8 @@ test('native client profile rejects invalid IDs, inconsistent auth devices and i
         { clientRandomId: '1.5' },
         { deviceType: 'Nintendo' },
         { deviceId: 'invalid' },
+        { deviceId: '12345678-1234-4234-8234-123456789abc' },
+        { deviceId: '0123456789ABCDEF0123456789ABCDEF' },
         { platformOnlineId: '' },
         { platformOnlineId: 'not-a-xuid' },
         { inputMode: 0 },

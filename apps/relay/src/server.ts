@@ -16,6 +16,7 @@ export interface RelayOptions {
     maxSessionsPerIp?: number;
     idleTimeoutMs?: number;
     sessionTimeoutMs?: number;
+    maxPacketsPerSecond?: number;
     resolve?: typeof resolveTarget;
     authForwarder?: AuthForwarder;
 }
@@ -23,7 +24,9 @@ export interface RelayOptions {
 const MAX_DATAGRAM = 1492;
 const MAX_BUFFERED = 256 * 1024;
 const MAX_BYTES = 512 * 1024 * 1024;
-const MAX_PACKETS_PER_SECOND = 1000;
+// Pack downloads burst several hundred full datagrams per requested chunk window,
+// plus the client's acknowledgements, so the default must sit well above that.
+const MAX_PACKETS_PER_SECOND = 20000;
 
 export function createRelay(options: RelayOptions) {
     const authenticate = createAuthHandler(options.origins, options.authForwarder);
@@ -184,12 +187,16 @@ function bridge(
     let windowStart = started;
     let packets = 0;
     let bytes = 0;
-    const finish = () => {
+    const finish = (reason: string) => {
         if (closed) {
             return;
         }
 
         closed = true;
+        console.info(
+            `Relay session to ${address}:${port} closed after ${Date.now() - started} ms: ${reason} ` +
+                `(${bytes} bytes, ${packets} packets in the current second).`,
+        );
         clearInterval(timer);
         try {
             udp.close();
@@ -206,8 +213,12 @@ function bridge(
             packets = 0;
         }
         bytes += length;
-        if (++packets > MAX_PACKETS_PER_SECOND || bytes > MAX_BYTES) {
-            finish();
+        if (++packets > (options.maxPacketsPerSecond ?? MAX_PACKETS_PER_SECOND)) {
+            finish('packet rate limit exceeded');
+            return false;
+        }
+        if (bytes > MAX_BYTES) {
+            finish('total byte limit exceeded');
             return false;
         }
         lastActivity = now;
@@ -215,17 +226,16 @@ function bridge(
     };
     const timer = setInterval(() => {
         const now = Date.now();
-        if (
-            now - lastActivity > (options.idleTimeoutMs ?? 15000) ||
-            now - started > (options.sessionTimeoutMs ?? 300000)
-        ) {
-            finish();
+        if (now - lastActivity > (options.idleTimeoutMs ?? 15000)) {
+            finish('idle timeout');
+        } else if (now - started > (options.sessionTimeoutMs ?? 300000)) {
+            finish('session lifetime exceeded');
         }
     }, 1000);
     timer.unref();
-    ws.on('error', finish);
-    ws.on('close', finish);
-    udp.on('error', finish);
+    ws.on('error', (error) => finish(`WebSocket error: ${error.message}`));
+    ws.on('close', (code) => finish(`browser closed the WebSocket (${code})`));
+    udp.on('error', (error) => finish(`UDP error: ${error.message}`));
     ws.on('message', (data, binary) => {
         if (
             !ready ||
@@ -234,7 +244,7 @@ function bridge(
             data.length === 0 ||
             data.length > MAX_DATAGRAM
         ) {
-            finish();
+            finish('invalid message from the browser');
             return;
         }
         if (!account(data.length)) {
@@ -242,12 +252,12 @@ function bridge(
         }
 
         if (udp.getSendQueueSize() > MAX_BUFFERED) {
-            finish();
+            finish('UDP send queue full');
             return;
         }
         udp.send(data, (error) => {
             if (error) {
-                finish();
+                finish(`UDP send failed: ${error.message}`);
             }
         });
     });
@@ -257,7 +267,11 @@ function bridge(
         }
 
         if (ws.readyState !== WebSocket.OPEN || ws.bufferedAmount > MAX_BUFFERED) {
-            finish();
+            finish(
+                ws.readyState === WebSocket.OPEN
+                    ? 'WebSocket output buffer full'
+                    : 'WebSocket no longer open',
+            );
             return;
         }
         ws.send(
@@ -267,7 +281,7 @@ function bridge(
             },
             (error) => {
                 if (error) {
-                    finish();
+                    finish(`WebSocket send failed: ${error.message}`);
                 }
             },
         );

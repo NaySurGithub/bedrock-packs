@@ -100,6 +100,18 @@ function browserEnvironment(): ProfileEnvironment {
     };
 }
 
+// Windows (DeviceOS 8) clients send 16 bytes as 32 lowercase hex digits, not a dashed UUID.
+// Same derivation as SolarProxy's "Windows 10" identity, so one account keeps one stable ID.
+export async function windowsDeviceId(xuid: string): Promise<string> {
+    const digest = await crypto.subtle.digest(
+        'SHA-256',
+        new TextEncoder().encode(`solar-device:Windows 10:${xuid}`),
+    );
+    return Array.from(new Uint8Array(digest, 0, 16), (byte) =>
+        byte.toString(16).padStart(2, '0'),
+    ).join('');
+}
+
 export function createClientProfile(
     deviceId: string,
     deviceType: string,

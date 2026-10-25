@@ -13,3 +13,4 @@ apps/web/public/third-party/
 coverage/
 .DS_Store
 Thumbs.db
+logs/

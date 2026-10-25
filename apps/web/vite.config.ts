@@ -1,4 +1,9 @@
+import { appendFile, mkdir, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig, loadEnv } from 'vite';
+
+const debugLog = fileURLToPath(new URL('../../logs/debug.log', import.meta.url));
 
 export default defineConfig(({ mode }) => {
     const environment = loadEnv(mode, process.cwd(), 'VITE_');
@@ -31,6 +36,51 @@ export default defineConfig(({ mode }) => {
     return {
         base: './',
         plugins: [
+            {
+                name: 'development-debug-log',
+                apply: 'serve',
+                configureServer(server) {
+                    server.middlewares.use('/__debug-log', (request, response) => {
+                        const file = new URL(
+                            request.url ?? '',
+                            'http://localhost',
+                        ).searchParams.get('file');
+                        if (
+                            request.method !== 'POST' ||
+                            (file !== null && !/^[\w-][\w.-]{0,199}$/.test(file))
+                        ) {
+                            response.statusCode = 405;
+                            response.end();
+                            return;
+                        }
+                        const chunks: Buffer[] = [];
+                        request.on('data', (chunk: Buffer) => chunks.push(chunk));
+                        request.on('end', () => {
+                            const data = Buffer.concat(chunks);
+                            const body = data.toString('utf8').trim();
+                            void mkdir(dirname(debugLog), { recursive: true })
+                                .then(() =>
+                                    file
+                                        ? writeFile(join(dirname(debugLog), file), data)
+                                        : body
+                                          ? appendFile(debugLog, `${body}\n`)
+                                          : undefined,
+                                )
+                                .then(
+                                    () => {
+                                        response.statusCode = 204;
+                                        response.end();
+                                    },
+                                    () => {
+                                        response.statusCode = 500;
+                                        response.end();
+                                    },
+                                );
+                        });
+                    });
+                    server.config.logger.info(`  ➜  Debug log: ${debugLog}`);
+                },
+            },
             {
                 name: 'production-content-security-policy',
                 apply: 'build',

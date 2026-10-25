@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createClientProfile, memoryTier, profileIds } from '../apps/web/src/connection/profile.js';
+import { createHash } from 'node:crypto';
+import {
+    createClientProfile,
+    memoryTier,
+    profileIds,
+    windowsDeviceId,
+} from '../apps/web/src/connection/profile.js';
 
 test('client IDs survive repeated joins and transfers without storing account credentials', () => {
     const entries = new Map<string, string>();
@@ -97,4 +103,16 @@ test('profile derives locale and actual input from the browser, preserving the a
     assert.equal(touch.inputMode, 2);
     assert.equal(touch.languageCode, 'ja_JP');
     assert.equal(touch.clientRandomId, profile.clientRandomId);
+});
+
+test('Windows device IDs are stable 32-digit lowercase hex, derived like SolarProxy', async () => {
+    const xuid = '2535412345678901';
+    const id = await windowsDeviceId(xuid);
+    assert.match(id, /^[0-9a-f]{32}$/);
+    assert.equal(
+        id,
+        createHash('sha256').update(`solar-device:Windows 10:${xuid}`).digest('hex').slice(0, 32),
+    );
+    assert.equal(await windowsDeviceId(xuid), id);
+    assert.notEqual(await windowsDeviceId('2535412345678902'), id);
 });

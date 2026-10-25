@@ -38,6 +38,7 @@ const relay = createRelay({
         allowedPorts: ports,
     },
     maxSessions: integer('RELAY_MAX_SESSIONS', 64, 4096),
+    maxPacketsPerSecond: integer('RELAY_MAX_PACKETS_PER_SECOND', 20000, 1000000),
 });
 const host = process.env.RELAY_HOST ?? '127.0.0.1';
 const port = integer('RELAY_PORT', 8787);

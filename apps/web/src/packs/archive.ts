@@ -7,6 +7,8 @@ import { MAX_PACK_SIZE } from './types.js';
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true });
 const MAX_EXPANDED_SIZE = 512 * 1024 * 1024;
+// Large server packs ship well over 10000 small files; the expanded size bounds memory.
+const MAX_FILES = 100000;
 
 function safePath(path: string): string {
     if (
@@ -46,18 +48,28 @@ function unpack(data: Uint8Array): Promise<Unzipped> {
     return new Promise((resolve, reject) => {
         let total = 0;
         let count = 0;
-        let invalid = false;
+        let invalid = '';
         unzip(
             data,
             {
                 filter(file) {
                     total += file.originalSize;
-                    invalid ||= total > MAX_EXPANDED_SIZE || ++count > 10000;
+                    count++;
+                    if (!invalid && total > MAX_EXPANDED_SIZE)
+                        invalid = `expands past 512 MiB at ${file.name}`;
+                    if (!invalid && count > MAX_FILES)
+                        invalid = `contains more than ${MAX_FILES} files`;
                     return !invalid;
                 },
             },
             (error, files) => {
-                if (error || invalid) reject(new Error('Invalid or oversized pack ZIP archive.'));
+                if (error || invalid)
+                    reject(
+                        new Error(
+                            `Invalid or oversized pack ZIP archive: ${invalid || error!.message} ` +
+                                `(${data.length} bytes, ${count} entries, ${total} bytes expanded).`,
+                        ),
+                    );
                 else resolve(files);
             },
         );

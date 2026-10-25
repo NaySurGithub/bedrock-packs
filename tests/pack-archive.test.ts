@@ -59,3 +59,12 @@ test('download all archive contains importable .mcpack files', async () => {
         plaintext,
     );
 });
+
+test('opens large packs with more than 10000 small files', async () => {
+    const files = unzipSync(fixture(false));
+    for (let index = 0; index < 12200; index++) {
+        files[`textures/many/${index}.json`] = encode('{}');
+    }
+    const result = await processArchive(zipSync(files, { level: 0 }), { ...offer, key: '' });
+    assert.equal(Object.keys(unzipSync(result.archive)).length, Object.keys(files).length);
+});

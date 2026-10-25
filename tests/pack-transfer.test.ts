@@ -279,3 +279,33 @@ test('native pack bridge accepts full 1 MiB chunks including packet overhead', (
     assert.equal(event.type, 'pack-chunk');
     if (event.type === 'pack-chunk') assert.equal(event.data.length, data.length);
 });
+
+test('pack-data sizes that differ from the announcement are downloaded and verified', async (t) => {
+    const h = harness();
+    t.after(() => h.controller.abort());
+    const data = fixture();
+    const announced = { ...offer, size: data.length - 3 };
+    await h.transfer.handle({ type: 'packs-info', packs: [announced] });
+    await h.transfer.handle(h.read(dataPacket({ ...offer, size: data.length }, data, 128)));
+    assert.equal(h.views[0]!.size, data.length);
+    for (let index = 0; index < Math.ceil(data.length / 128); index++) {
+        await h.transfer.handle(h.read(chunkPacket(offer, data, 128, index)));
+    }
+    assert.equal(h.views[0]!.status, 'ready');
+    assert.equal(h.views[0]!.received, data.length);
+    assert.deepEqual(h.responses, [2, 3]);
+});
+
+test('the CDN fetcher is called without a receiver, as browsers require for fetch', async (t) => {
+    const data = fixture();
+    const h = harness(async function (this: unknown) {
+        assert.equal(this, undefined);
+        return new Response(data);
+    });
+    t.after(() => h.controller.abort());
+    await h.transfer.handle({
+        type: 'packs-info',
+        packs: [{ ...offer, size: data.length, cdnUrl: 'https://cdn.example.test/pack' }],
+    });
+    assert.deepEqual(h.responses, [3]);
+});

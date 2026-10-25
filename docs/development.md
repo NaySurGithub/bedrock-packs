@@ -103,7 +103,10 @@ input modes 1/1, GUI scale -1, memory tier 4 and maximum view distance 77.
 Editor capability, client-side chunk generation, profanity filtering and trusted
 and premium skin flags match that captured profile. These are login metadata;
 they do not implement an editor or local world generation in the browser.
-Authentication still uses the existing Android XAL flow and its device ID.
+Authentication still uses the existing Android XAL flow and its UUID device ID.
+The login DeviceId is separate: 32 lowercase hex digits, as DeviceOS 8 clients
+send, taken from the first 16 bytes of SHA-256(`solar-device:Windows 10:<XUID>`)
+so it matches SolarProxy's Windows 10 identity and stays stable per account.
 
 The game version and geometry engine version come from Falcon Protocol's pinned
 `ProtocolInfo` (`1.26.52`), never from a server's advertised version. The site retains

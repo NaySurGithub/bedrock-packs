@@ -1,6 +1,7 @@
-import { createClientProfile } from './profile.js';
+import { createClientProfile, windowsDeviceId } from './profile.js';
 import { followTransfers, transferTarget } from './routing.js';
 import type { EndpointResult, ServerTarget } from './routing.js';
+import { debug } from '../debug.js';
 import { PackTransfer } from '../packs/transfer.js';
 import { processPack } from '../packs/process.js';
 import type { PackView } from '../packs/types.js';
@@ -143,6 +144,15 @@ async function connectEndpoint(
     const close = (result: EndpointResult = { type: 'cancelled', message: 'Disconnected.' }) => {
         if (closed) return;
         closed = true;
+        debug('session', 'closed', {
+            result: result.type,
+            detail:
+                result.type === 'error'
+                    ? result.error.message
+                    : result.type === 'cancelled'
+                      ? result.message
+                      : result.target,
+        });
         clearTimeout(deadline);
         signal.removeEventListener('abort', abort);
         unsubscribe();
@@ -190,6 +200,12 @@ async function connectEndpoint(
             phase: 'connecting',
             message: `Connecting to ${host}:${port} with ${server.transport}…`,
         });
+        debug('session', 'connecting', {
+            host,
+            port,
+            transport: server.transport,
+            protocol,
+        });
         transport =
             server.transport === 'NetherNet'
                 ? await connectNetherNet(codec, identity, host, port, controller.signal)
@@ -203,7 +219,12 @@ async function connectEndpoint(
             identity.gamertag,
             clientVersion,
             identity.identity.playFabId,
-            createClientProfile(identity.deviceId, identity.deviceType, identity.xuid),
+            // The Xbox device token keeps its own UUID; the login claims a Windows device ID.
+            createClientProfile(
+                await windowsDeviceId(identity.xuid),
+                identity.deviceType,
+                identity.xuid,
+            ),
         );
         const clientJwt = await signToken(identity, data);
         const auth = await loginIdentity(identity, clientVersion);
@@ -251,6 +272,16 @@ async function connectEndpoint(
                 for (const packet of codec.receive(batch)) {
                     if (closed) break;
                     const event = codec.read(packet);
+                    if (event.type !== 'pack-chunk') {
+                        const { token: _token, ...details } = event as typeof event & {
+                            token?: string;
+                        };
+                        debug(
+                            'session',
+                            `packet ${event.type}`,
+                            event.type === 'packs-info' ? { count: event.packs.length } : details,
+                        );
+                    }
 
                     switch (event.type) {
                         case 'settings':

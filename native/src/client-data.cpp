@@ -148,6 +148,11 @@ extern "C" EMSCRIPTEN_KEEPALIVE const char* bp_client_data(unsigned int length) 
         }
         return true;
     };
+    // DeviceOS 8 device IDs are 16 bytes written as 32 lowercase hex digits.
+    const auto is_windows_device_id = [](const std::string& value) {
+        return value.size() == 32 &&
+            value.find_first_not_of("0123456789abcdef") == std::string::npos;
+    };
     const auto online_id = text("platformOnlineId");
     if (online_id.empty() || online_id.size() > 20 || online_id.find_first_not_of("0123456789") != std::string::npos)
         return bedrock_packs::set_output({});
@@ -158,7 +163,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE const char* bp_client_data(unsigned int length) 
     const int current_input = integer("inputMode");
     const int memory = integer("memoryTier");
     // Validate the authentication context separately from the captured login profile.
-    if (text("deviceType") != "Android" || !is_uuid(device_id) || !is_uuid(self_id) ||
+    if (text("deviceType") != "Android" || !is_windows_device_id(device_id) || !is_uuid(self_id) ||
         !is_uuid(skin_id) || language.empty() || language.size() > 32 ||
         (current_input != 1 && current_input != 2) || memory < 0) return bedrock_packs::set_output({});
     const auto random_id = text("clientRandomId");
