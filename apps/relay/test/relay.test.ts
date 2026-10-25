@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import type { TestContext } from 'node:test';
 import { WebSocket } from 'ws';
 import { createRelay } from '../src/server.js';
-import { isPublicAddress, resolveTarget } from '../src/policy.js';
+import { isPublicAddress, parseAllowedPorts, resolveTarget } from '../src/policy.js';
 
 const origin = 'http://localhost:5173';
 
@@ -242,3 +242,13 @@ test(
         assert.equal(receivedDatagram, false);
     },
 );
+
+test('allowed ports accept lists and inclusive ranges', () => {
+    assert.deepEqual([...parseAllowedPorts('19132')], [19132]);
+    assert.deepEqual([...parseAllowedPorts('19132, 19140-19142')], [19132, 19140, 19141, 19142]);
+    const open = parseAllowedPorts('1024-65535');
+    assert.equal(open.size, 64512);
+    assert(open.has(25565) && !open.has(53) && !open.has(1023));
+    for (const invalid of ['', '0', '65536', '19133-19132', 'abc', '1-2-3', '19132,'])
+        assert.throws(() => parseAllowedPorts(invalid), /RELAY_ALLOWED_PORTS/);
+});

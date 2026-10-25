@@ -77,3 +77,18 @@ export async function resolveTarget(host: string, port: number, policy: Destinat
     // Connect to this resolved IP, never resolve the hostname again after validation.
     return publicAddress;
 }
+
+// Parses RELAY_ALLOWED_PORTS: comma-separated ports and inclusive ranges, e.g. "19132,1024-65535".
+export function parseAllowedPorts(value: string): Set<number> {
+    const ports = new Set<number>();
+    for (const part of value.split(',')) {
+        const match = /^\s*(\d{1,5})\s*(?:-\s*(\d{1,5})\s*)?$/.exec(part);
+        const first = Number(match?.[1]);
+        const last = Number(match?.[2] ?? match?.[1]);
+        if (!match || first < 1 || last > 65535 || first > last) {
+            throw new Error('Invalid RELAY_ALLOWED_PORTS.');
+        }
+        for (let port = first; port <= last; port++) ports.add(port);
+    }
+    return ports;
+}

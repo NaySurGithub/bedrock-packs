@@ -1,3 +1,4 @@
+import { parseAllowedPorts } from './policy.js';
 import { createRelay } from './server.js';
 
 function integer(name: string, fallback: number, max = 65535, min = 1): number {
@@ -21,16 +22,7 @@ const hosts = new Set(
         .map((s) => s.trim().toLowerCase())
         .filter(Boolean),
 );
-const ports = new Set(
-    (process.env.RELAY_ALLOWED_PORTS ?? '19132').split(',').map((s) => {
-        const value = s.trim();
-        if (!/^\d+$/.test(value) || Number(value) < 1 || Number(value) > 65535) {
-            throw new Error('Invalid RELAY_ALLOWED_PORTS.');
-        }
-
-        return Number(value);
-    }),
-);
+const ports = parseAllowedPorts(process.env.RELAY_ALLOWED_PORTS ?? '19132');
 const relay = createRelay({
     origins,
     policy: {
