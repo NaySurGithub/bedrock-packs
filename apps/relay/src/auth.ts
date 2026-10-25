@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { request as requestHttps } from 'node:https';
+import { clientIp } from './client-ip.js';
 
 export interface AuthResponse {
     status: number;
@@ -261,7 +262,11 @@ function readBody(request: IncomingMessage): Promise<string> {
     });
 }
 
-export function createAuthHandler(origins: ReadonlySet<string>, forward = forwardAuthentication) {
+export function createAuthHandler(
+    origins: ReadonlySet<string>,
+    forward = forwardAuthentication,
+    trustedProxies = 0,
+) {
     const windows = new Map<
         string,
         {
@@ -315,7 +320,7 @@ export function createAuthHandler(origins: ReadonlySet<string>, forward = forwar
         }
 
         const now = Date.now();
-        const ip = request.socket.remoteAddress ?? 'unknown';
+        const ip = clientIp(request, trustedProxies);
 
         for (const [key, window] of windows) {
             if (window.active === 0 && now - window.start >= 60000) {

@@ -1,8 +1,8 @@
 import { createRelay } from './server.js';
 
-function integer(name: string, fallback: number, max = 65535): number {
+function integer(name: string, fallback: number, max = 65535, min = 1): number {
     const value = process.env[name] ?? String(fallback);
-    if (!/^\d+$/.test(value) || Number(value) < 1 || Number(value) > max) {
+    if (!/^\d+$/.test(value) || Number(value) < min || Number(value) > max) {
         throw new Error(`Invalid ${name}.`);
     }
 
@@ -39,9 +39,11 @@ const relay = createRelay({
     },
     maxSessions: integer('RELAY_MAX_SESSIONS', 64, 4096),
     maxPacketsPerSecond: integer('RELAY_MAX_PACKETS_PER_SECOND', 20000, 1000000),
+    trustedProxies: integer('RELAY_TRUSTED_PROXIES', 0, 8, 0),
 });
 const host = process.env.RELAY_HOST ?? '127.0.0.1';
-const port = integer('RELAY_PORT', 8787);
+// Hosting platforms such as Render assign the listening port through PORT.
+const port = integer(process.env.RELAY_PORT ? 'RELAY_PORT' : 'PORT', 8787);
 relay.server.listen(port, host, () =>
     console.info(`Bedrock Packs relay listening on ${host}:${port}`),
 );

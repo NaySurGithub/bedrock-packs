@@ -2,6 +2,7 @@ import { request as httpRequest } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { resolveTarget } from './policy.js';
 import type { DestinationPolicy } from './policy.js';
+import { clientIp } from './client-ip.js';
 
 const maximumSdpBytes = 1024 * 1024;
 
@@ -9,6 +10,7 @@ export function createSignalingHandler(options: {
     origins: ReadonlySet<string>;
     policy: DestinationPolicy;
     resolve?: typeof resolveTarget;
+    trustedProxies?: number;
 }) {
     const clients = new Map<string, number>();
     let active = 0;
@@ -31,7 +33,7 @@ export function createSignalingHandler(options: {
             return;
         }
 
-        const ip = request.socket.remoteAddress ?? '';
+        const ip = clientIp(request, options.trustedProxies);
 
         if (request.method !== 'POST') {
             response.writeHead(405).end();

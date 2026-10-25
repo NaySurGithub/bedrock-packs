@@ -38,15 +38,16 @@ npm run build --workspace @bedrock-packs/relay
 npm run start --workspace @bedrock-packs/relay
 ```
 
-| Variable                       | Default                   | Purpose                                           |
-| ------------------------------ | ------------------------- | ------------------------------------------------- |
-| `RELAY_HOST`                   | `127.0.0.1`               | Listening interface                               |
-| `RELAY_PORT`                   | `8787`                    | HTTP and WebSocket port                           |
-| `RELAY_ORIGINS`                | Local development origins | Comma-separated exact browser origins             |
-| `RELAY_ALLOWED_PORTS`          | `19132`                   | Comma-separated destination UDP ports             |
-| `RELAY_ALLOWED_HOSTS`          | Empty                     | Optional exact hostname allowlist                 |
-| `RELAY_MAX_SESSIONS`           | `64`                      | Global concurrent session limit                   |
-| `RELAY_MAX_PACKETS_PER_SECOND` | `20000`                   | Datagrams per session per second, both directions |
+| Variable                       | Default                   | Purpose                                                                                   |
+| ------------------------------ | ------------------------- | ----------------------------------------------------------------------------------------- |
+| `RELAY_HOST`                   | `127.0.0.1`               | Listening interface                                                                       |
+| `RELAY_PORT`                   | `8787`                    | HTTP and WebSocket port; falls back to `PORT`                                             |
+| `RELAY_ORIGINS`                | Local development origins | Comma-separated exact browser origins                                                     |
+| `RELAY_ALLOWED_PORTS`          | `19132`                   | Comma-separated destination UDP ports                                                     |
+| `RELAY_ALLOWED_HOSTS`          | Empty                     | Optional exact hostname allowlist                                                         |
+| `RELAY_MAX_SESSIONS`           | `64`                      | Global concurrent session limit                                                           |
+| `RELAY_MAX_PACKETS_PER_SECOND` | `20000`                   | Datagrams per session per second, both directions                                         |
+| `RELAY_TRUSTED_PROXIES`        | `0`                       | Reverse proxies in front of the relay whose `X-Forwarded-For` entry identifies the client |
 
 The process reads environment variables directly. An `.env` file is not loaded automatically.
 

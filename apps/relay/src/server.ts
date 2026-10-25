@@ -8,6 +8,7 @@ import { probeEndpoint } from './probe.js';
 import { createAuthHandler } from './auth.js';
 import type { AuthForwarder } from './auth.js';
 import { createSignalingHandler } from './signaling.js';
+import { clientIp } from './client-ip.js';
 
 export interface RelayOptions {
     origins: ReadonlySet<string>;
@@ -17,6 +18,7 @@ export interface RelayOptions {
     idleTimeoutMs?: number;
     sessionTimeoutMs?: number;
     maxPacketsPerSecond?: number;
+    trustedProxies?: number;
     resolve?: typeof resolveTarget;
     authForwarder?: AuthForwarder;
 }
@@ -29,7 +31,11 @@ const MAX_BYTES = 512 * 1024 * 1024;
 const MAX_PACKETS_PER_SECOND = 20000;
 
 export function createRelay(options: RelayOptions) {
-    const authenticate = createAuthHandler(options.origins, options.authForwarder);
+    const authenticate = createAuthHandler(
+        options.origins,
+        options.authForwarder,
+        options.trustedProxies,
+    );
     const signal = createSignalingHandler(options);
 
     const server = createServer((request, response) => {
@@ -61,7 +67,7 @@ export function createRelay(options: RelayOptions) {
         const reject = (status: number) => {
             socket.end(`HTTP/1.1 ${status} Rejected\r\nConnection: close\r\n\r\n`);
         };
-        const ip = request.socket.remoteAddress ?? 'unknown';
+        const ip = clientIp(request, options.trustedProxies);
         const origin = request.headers.origin;
         let url: URL;
         try {
