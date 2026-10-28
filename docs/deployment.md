@@ -43,7 +43,7 @@ npm run start --workspace @bedrock-packs/relay
 | `RELAY_HOST`                   | `127.0.0.1`               | Listening interface                                                                       |
 | `RELAY_PORT`                   | `8787`                    | HTTP and WebSocket port; falls back to `PORT`                                             |
 | `RELAY_ORIGINS`                | Local development origins | Comma-separated exact browser origins                                                     |
-| `RELAY_ALLOWED_PORTS`          | `19132`                   | Destination UDP ports and ranges, e.g. `19132,1024-65535`                                                     |
+| `RELAY_ALLOWED_PORTS`          | `19132`                   | Destination UDP ports and ranges, e.g. `19132,1024-65535`                                 |
 | `RELAY_ALLOWED_HOSTS`          | Empty                     | Optional exact hostname allowlist                                                         |
 | `RELAY_MAX_SESSIONS`           | `64`                      | Global concurrent session limit                                                           |
 | `RELAY_MAX_PACKETS_PER_SECOND` | `20000`                   | Datagrams per session per second, both directions                                         |
