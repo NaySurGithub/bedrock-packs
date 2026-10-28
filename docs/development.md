@@ -108,8 +108,9 @@ The login DeviceId is separate: 32 lowercase hex digits, as DeviceOS 8 clients
 send, taken from the first 16 bytes of SHA-256(`solar-device:Windows 10:<XUID>`)
 so it matches SolarProxy's Windows 10 identity and stays stable per account.
 
-The game version and geometry engine version come from Falcon Protocol's pinned
-`ProtocolInfo` (`1.26.52`), never from a server's advertised version. The site retains
+The game version and geometry engine version follow the protocol selected for the
+server: `1.26.60` for 2225 (Falcon Protocol's pinned `ProtocolInfo`) and `1.26.52`
+for older codecs, never a server's advertised version string. The site retains
 its own locally generated 64x64 RGBA fallback skin and matching geometry; it does
 not copy the user's skin pixels, private identifiers or authentication tokens.
 

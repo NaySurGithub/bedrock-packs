@@ -178,7 +178,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE const char* bp_client_data(unsigned int length) 
     ClientData data;
     data.mPlayFabId.clear();
     data.mPlatformOnlineId.clear();
-    data.mGameVersion = ProtocolInfo::MINECRAFT_VERSION_NETWORK;
+    data.mGameVersion = bedrock_packs::selected_game_version();
     data.mDeviceId = device_id;
     data.mSelfSignedId = self_id;
     data.mClientRandomId = client_id;
@@ -204,7 +204,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE const char* bp_client_data(unsigned int length) 
     data.mSkinImageWidth = 64;
     data.mSkinImageHeight = 64;
     data.mSkinData = Base64::encode(std::string(64 * 64 * 4, '\xff'));
-    data.mSkinGeometryVersion = Base64::encode(ProtocolInfo::MINECRAFT_VERSION_NETWORK);
+    data.mSkinGeometryVersion = Base64::encode(data.mGameVersion);
     data.mTrustedSkin = true;
     data.mPremiumSkin = true;
     ClientConnectionRequest::applyClientDefaults(data, address->string(), name->string(), version->string());

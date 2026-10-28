@@ -40,7 +40,7 @@ test('browser authentication configuration comes from Falcon Network', () => {
     assert.equal(configuration.clientId, '0000000048183522');
     assert.equal(configuration.deviceType, 'Android');
     assert.equal(configuration.deviceVersion, '8.0.0');
-    assert.equal(configuration.gameVersion, '1.26.52');
+    assert.equal(configuration.gameVersion, '1.26.60');
     assert.match(configuration.userAgent, /^XAL Android/);
 });
 
@@ -335,10 +335,30 @@ test('native client profile rejects invalid IDs, inconsistent auth devices and i
 test('server advertisements cannot downgrade the client GameVersion or geometry engine', () => {
     const claims = JSON.parse(clientClaims(profileFixture, 'motazmc.fr:19132', '1.26.50'));
     const config = JSON.parse(readOutput(native._bp_auth_config()));
-    assert.equal(claims.GameVersion, '1.26.52');
+    assert.equal(claims.GameVersion, '1.26.60');
     assert.equal(claims.GameVersion, config.gameVersion);
-    assert.equal(Buffer.from(claims.SkinGeometryDataEngineVersion, 'base64').toString(), '1.26.52');
+    assert.equal(Buffer.from(claims.SkinGeometryDataEngineVersion, 'base64').toString(), '1.26.60');
     const touch = JSON.parse(clientClaims({ ...profileFixture, inputMode: 2 }));
     assert.equal(touch.CurrentInputMode, 1);
     assert.equal(touch.DefaultInputMode, 1);
+});
+
+test('login GameVersion follows the selected protocol, including 1.26.60', () => {
+    try {
+        for (const [protocol, version] of [
+            [2225, '1.26.60'],
+            [2193, '1.26.52'],
+        ] as const) {
+            assert.equal(native._bp_protocol_select(protocol), 1);
+            const claims = JSON.parse(clientClaims());
+            assert.equal(claims.GameVersion, version);
+            assert.equal(
+                Buffer.from(claims.SkinGeometryDataEngineVersion, 'base64').toString(),
+                version,
+            );
+        }
+        assert.equal(native._bp_protocol_select(2224), 0, 'unknown protocols are refused');
+    } finally {
+        native._bp_protocol_select(2225);
+    }
 });

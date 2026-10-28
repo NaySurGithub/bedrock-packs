@@ -4,6 +4,8 @@
 
 namespace bedrock_packs {
     const char* set_output(std::string value);
+    // Game version a vanilla client of the selected protocol announces in its login.
+    std::string selected_game_version();
 }
 
 extern "C" {

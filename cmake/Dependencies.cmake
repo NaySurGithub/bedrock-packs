@@ -12,7 +12,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     falcon_protocol
     GIT_REPOSITORY https://github.com/Falcon-MC/Protocol.git
-    GIT_TAG 8990c4b68504516c293b7fd32ac8f0d056aca714
+    GIT_TAG 89b6784e4d8a037ab43d30eddce490fbdd04893f
 )
 
 # The upstream target uses native sockets, OpenSSL and libdatachannel.
@@ -20,7 +20,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     falcon_network
     GIT_REPOSITORY https://github.com/Falcon-MC/Network.git
-    GIT_TAG 37a1b2f75fcead296ac2ffec77d86c999e611f17
+    GIT_TAG f4b65a814c24602c3e414ca5476d90e28b68bdce
     SOURCE_SUBDIR cmake/bedrock-packs-browser
 )
 

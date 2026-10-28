@@ -45,11 +45,24 @@ namespace {
     const ItemDefinitionRegistry items;
     std::optional<PacketCodecContext> codec(std::in_place, blocks, items);
 
+    // Falcon codecs carry only a protocol number. Older codecs keep the version this
+    // client announced before 1.26.60, so their logins do not change.
+    const char* game_version(int protocol) {
+        switch (protocol) {
+            case 2225: return "1.26.60";
+            default: return "1.26.52";
+        }
+    }
+
     const char* encode(const Packet& packet) {
         BinaryStream stream;
         packet.writeWithHeader(stream, *codec);
         return bedrock_packs::set_output(stream.getBuffer());
     }
+}
+
+std::string bedrock_packs::selected_game_version() {
+    return game_version(codec->getCodec().getProtocolVersion());
 }
 
 extern "C" {
